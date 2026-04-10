@@ -17,7 +17,6 @@ struct CameraRootView: View {
             }
         }
         .background(Color.black)
-        .ignoresSafeArea()
         .task {
             controller.prepare()
         }
@@ -51,6 +50,7 @@ struct CameraRootView: View {
                 endPoint: .bottom
             )
         }
+        .ignoresSafeArea()
     }
 
     private var chromeOverlay: some View {
