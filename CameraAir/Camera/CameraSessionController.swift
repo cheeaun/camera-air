@@ -10,6 +10,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     @Published private(set) var isRecording = false
     @Published private(set) var isCameraAccessDenied = false
     @Published private(set) var latestThumbnail: UIImage?
+    @Published var latestCaptureAsset: PHAsset?
     @Published var errorMessage: String?
 
     let session = AVCaptureSession()
@@ -24,6 +25,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private var isConfigured = false
     private var hasPrepared = false
     private var pendingRoute: CameraRoute?
+    private var isOpeningCapture = false
 
     func prepare() {
         guard !hasPrepared else { return }
@@ -183,6 +185,44 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             sessionQueue.asyncAfter(deadline: .now() + 0.35) { [weak self] in
                 self?.startRecordingIfNeeded()
             }
+        }
+    }
+
+    func openLatestCapture() {
+        guard !isOpeningCapture else { return }
+        isOpeningCapture = true
+
+        Task {
+            let authorized = await Self.requestPhotoLibraryAccess(accessLevel: .addOnly)
+            guard authorized else {
+                self.showTransientError("Photo Library access is required to view captures.")
+                self.isOpeningCapture = false
+                return
+            }
+
+            let options = PHFetchOptions()
+            options.predicate = NSPredicate(format: "mediaType IN %@", [PHAssetMediaType.image.rawValue, PHAssetMediaType.video.rawValue])
+            options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+            options.fetchLimit = 1
+
+            let result = PHAsset.fetchAssets(with: options)
+
+            guard let latestAsset = result.firstObject else {
+                self.showTransientError("No captures found.")
+                self.isOpeningCapture = false
+                return
+            }
+
+            self.publish {
+                self.latestCaptureAsset = latestAsset
+                self.isOpeningCapture = false
+            }
+        }
+    }
+
+    func dismissLatestCapture() {
+        publish {
+            self.latestCaptureAsset = nil
         }
     }
 
@@ -457,13 +497,13 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
         }
     }
 
-    fileprivate static func requestPhotoLibraryAccess() async -> Bool {
-        switch PHPhotoLibrary.authorizationStatus(for: .addOnly) {
+    fileprivate static func requestPhotoLibraryAccess(accessLevel: PHAccessLevel = .addOnly) async -> Bool {
+        switch PHPhotoLibrary.authorizationStatus(for: accessLevel) {
         case .authorized, .limited:
             return true
         case .notDetermined:
             return await withCheckedContinuation { continuation in
-                PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+                PHPhotoLibrary.requestAuthorization(for: accessLevel) { status in
                     continuation.resume(returning: status == .authorized || status == .limited)
                 }
             }

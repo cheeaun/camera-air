@@ -1,4 +1,6 @@
 import SwiftUI
+import Photos
+import AVKit
 import UIKit
 
 struct CameraRootView: View {
@@ -7,6 +9,7 @@ struct CameraRootView: View {
 
     @StateObject private var controller = CameraSessionController()
     @State private var isSettingsExpanded = false
+    @State private var isThumbnailPressed = false
 
     var body: some View {
         ZStack {
@@ -31,6 +34,11 @@ struct CameraRootView: View {
                 controller.pauseSession()
             @unknown default:
                 break
+            }
+        }
+        .fullScreenCover(item: $controller.latestCaptureAsset) { asset in
+            CaptureViewer(asset: asset) {
+                controller.dismissLatestCapture()
             }
         }
     }
@@ -189,26 +197,38 @@ struct CameraRootView: View {
     }
 
     private var thumbnailButton: some View {
-        Group {
-            if let image = controller.latestThumbnail {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                ZStack {
-                    Color.white.opacity(0.08)
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
+        Button {
+            controller.openLatestCapture()
+        } label: {
+            Group {
+                if let image = controller.latestThumbnail {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    ZStack {
+                        Color.white.opacity(0.08)
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
                 }
             }
+            .frame(width: 58, height: 58)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+            }
         }
-        .frame(width: 58, height: 58)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
-        }
+        .buttonStyle(.plain)
+        .scaleEffect(isThumbnailPressed ? 0.92 : 1)
+        .animation(.easeInOut(duration: 0.12), value: isThumbnailPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isThumbnailPressed = true }
+                .onEnded { _ in isThumbnailPressed = false }
+        )
     }
 
     private var captureButton: some View {
@@ -510,5 +530,104 @@ private struct GlassCapsuleModifier: ViewModifier {
 private extension View {
     func glassCapsule(interactive: Bool, isActive: Bool = false) -> some View {
         modifier(GlassCapsuleModifier(interactive: interactive, isActive: isActive))
+    }
+}
+
+extension PHAsset: @retroactive Identifiable {}
+
+private struct CaptureViewer: View {
+    let asset: PHAsset
+    let onDismiss: () -> Void
+
+    @State private var image: UIImage?
+    @State private var player: AVPlayer?
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            if asset.mediaType == .video {
+                if let player {
+                    VideoPlayer(player: player)
+                        .ignoresSafeArea()
+                } else {
+                    ProgressView()
+                        .tint(.white)
+                }
+            } else {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .ignoresSafeArea()
+                } else {
+                    ProgressView()
+                        .tint(.white)
+                }
+            }
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 30))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+                .padding(.trailing, 18)
+                .padding(.top, 10)
+                Spacer()
+            }
+        }
+        .task {
+            await loadAsset()
+        }
+        .onDisappear {
+            player?.pause()
+            player = nil
+        }
+    }
+
+    private func loadAsset() async {
+        if asset.mediaType == .video {
+            let options = PHVideoRequestOptions()
+            options.isNetworkAccessAllowed = true
+            let url = await withCheckedContinuation { (continuation: CheckedContinuation<URL?, Never>) in
+                PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
+                    if let urlAsset = avAsset as? AVURLAsset {
+                        continuation.resume(returning: urlAsset.url)
+                    } else {
+                        continuation.resume(returning: nil)
+                    }
+                }
+            }
+            if let url {
+                await MainActor.run {
+                    player = AVPlayer(url: url)
+                }
+            }
+        } else {
+            let options = PHImageRequestOptions()
+            options.isSynchronous = false
+            options.isNetworkAccessAllowed = true
+            options.deliveryMode = .highQualityFormat
+            let result = await withCheckedContinuation { (continuation: CheckedContinuation<UIImage?, Never>) in
+                PHImageManager.default().requestImage(
+                    for: asset,
+                    targetSize: PHImageManagerMaximumSize,
+                    contentMode: .default,
+                    options: options
+                ) { image, _ in
+                    continuation.resume(returning: image)
+                }
+            }
+            await MainActor.run {
+                self.image = result
+            }
+        }
     }
 }
