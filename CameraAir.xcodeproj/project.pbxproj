@@ -1,0 +1,292 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 71;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A00000000000000000000031 /* CameraAirApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000011 /* CameraAirApp.swift */; };
+		A00000000000000000000032 /* CameraRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000012 /* CameraRootView.swift */; };
+		A00000000000000000000033 /* CameraTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000013 /* CameraTypes.swift */; };
+		A00000000000000000000034 /* CameraSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000014 /* CameraSessionController.swift */; };
+		A00000000000000000000035 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000015 /* CameraPreviewView.swift */; };
+		A00000000000000000000036 /* CameraAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000016 /* CameraAppIntents.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A0000000000000000000000A /* CameraAir.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CameraAir.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00000000000000000000011 /* CameraAirApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraAirApp.swift; sourceTree = "<group>"; };
+		A00000000000000000000012 /* CameraRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraRootView.swift; sourceTree = "<group>"; };
+		A00000000000000000000013 /* CameraTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraTypes.swift; sourceTree = "<group>"; };
+		A00000000000000000000014 /* CameraSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSessionController.swift; sourceTree = "<group>"; };
+		A00000000000000000000015 /* CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewView.swift; sourceTree = "<group>"; };
+		A00000000000000000000016 /* CameraAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraAppIntents.swift; sourceTree = "<group>"; };
+		A00000000000000000000017 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A00000000000000000000018 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A00000000000000000000024 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A00000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000003 /* CameraAir */,
+				A00000000000000000000004 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A00000000000000000000003 /* CameraAir */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000005 /* App */,
+				A00000000000000000000006 /* Camera */,
+				A00000000000000000000007 /* AppIntents */,
+				A00000000000000000000008 /* Resources */,
+				A00000000000000000000017 /* Info.plist */,
+			);
+			path = CameraAir;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000004 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A0000000000000000000000A /* CameraAir.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000005 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000011 /* CameraAirApp.swift */,
+				A00000000000000000000012 /* CameraRootView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000006 /* Camera */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000013 /* CameraTypes.swift */,
+				A00000000000000000000014 /* CameraSessionController.swift */,
+				A00000000000000000000015 /* CameraPreviewView.swift */,
+			);
+			path = Camera;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000007 /* AppIntents */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000016 /* CameraAppIntents.swift */,
+			);
+			path = AppIntents;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000008 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000018 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A00000000000000000000009 /* CameraAir */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A0000000000000000000002A /* Build configuration list for PBXNativeTarget "CameraAir" */;
+			buildPhases = (
+				A00000000000000000000023 /* Sources */,
+				A00000000000000000000024 /* Frameworks */,
+				A00000000000000000000025 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CameraAir;
+			productName = CameraAir;
+			productReference = A0000000000000000000000A /* CameraAir.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2640;
+				LastUpgradeCheck = 2640;
+				TargetAttributes = {
+					A00000000000000000000009 = {
+						CreatedOnToolsVersion = 26.4;
+					};
+				};
+			};
+			buildConfigurationList = A00000000000000000000029 /* Build configuration list for PBXProject "CameraAir" */;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A00000000000000000000002;
+			productRefGroup = A00000000000000000000004 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A00000000000000000000009 /* CameraAir */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A00000000000000000000025 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A00000000000000000000023 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000000000000000000036 /* CameraAppIntents.swift in Sources */,
+				A00000000000000000000035 /* CameraPreviewView.swift in Sources */,
+				A00000000000000000000034 /* CameraSessionController.swift in Sources */,
+				A00000000000000000000033 /* CameraTypes.swift in Sources */,
+				A00000000000000000000032 /* CameraRootView.swift in Sources */,
+				A00000000000000000000031 /* CameraAirApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A00000000000000000000026 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A00000000000000000000027 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		A00000000000000000000028 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = A9N2N4N9T2;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CameraAir/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cheeaun.CameraAir;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = targeted;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A0000000000000000000002B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = A9N2N4N9T2;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CameraAir/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cheeaun.CameraAir;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = targeted;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A00000000000000000000029 /* Build configuration list for PBXProject "CameraAir" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000026 /* Debug */,
+				A00000000000000000000027 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A0000000000000000000002A /* Build configuration list for PBXNativeTarget "CameraAir" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000028 /* Debug */,
+				A0000000000000000000002B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A00000000000000000000001 /* Project object */;
+}
