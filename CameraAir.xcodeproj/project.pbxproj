@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9B544F372F88FFF200751366 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9B544F362F88FFF200751366 /* Assets.xcassets */; };
 		A00000000000000000000031 /* CameraAirApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000011 /* CameraAirApp.swift */; };
 		A00000000000000000000032 /* CameraRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000012 /* CameraRootView.swift */; };
 		A00000000000000000000033 /* CameraTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000013 /* CameraTypes.swift */; };
@@ -16,6 +17,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		9B544F362F88FFF200751366 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A0000000000000000000000A /* CameraAir.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CameraAir.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000011 /* CameraAirApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraAirApp.swift; sourceTree = "<group>"; };
 		A00000000000000000000012 /* CameraRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraRootView.swift; sourceTree = "<group>"; };
@@ -41,6 +43,7 @@
 		A00000000000000000000002 = {
 			isa = PBXGroup;
 			children = (
+				9B544F362F88FFF200751366 /* Assets.xcassets */,
 				A00000000000000000000003 /* CameraAir */,
 				A00000000000000000000004 /* Products */,
 			);
@@ -159,6 +162,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9B544F372F88FFF200751366 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -216,6 +220,7 @@
 		A00000000000000000000028 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 7WDVUPXAPH;
@@ -242,6 +247,7 @@
 		A0000000000000000000002B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 7WDVUPXAPH;
