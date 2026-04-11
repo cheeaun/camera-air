@@ -59,7 +59,7 @@ struct CameraRootView: View {
                 fitHeight = fitWidth / cropRatio
             }
 
-            CameraPreviewView(session: controller.session)
+            return CameraPreviewView(session: controller.session)
                 .frame(width: fitWidth, height: fitHeight)
                 .position(x: screenSize.width / 2, y: screenSize.height / 2)
         }
