@@ -193,7 +193,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         isOpeningCapture = true
 
         Task {
-            let authorized = await Self.requestPhotoLibraryAccess(accessLevel: .addOnly)
+            let authorized = await Self.requestPhotoLibraryAccess(accessLevel: .readWrite)
             guard authorized else {
                 self.showTransientError("Photo Library access is required to view captures.")
                 self.isOpeningCapture = false
