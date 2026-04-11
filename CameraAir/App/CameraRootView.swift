@@ -44,20 +44,33 @@ struct CameraRootView: View {
     }
 
     private var previewLayer: some View {
-        ZStack {
-            CameraPreviewView(session: controller.session)
-                .overlay(alignment: .center) {
-                    AspectRatioGuide(aspectRatio: controller.settings.aspectRatio)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 36)
-                }
+        GeometryReader { geometry in
+            let screenSize = geometry.size
+            let cropRatio = controller.settings.aspectRatio.cropRatio
+            let screenAspect = screenSize.width / max(screenSize.height, 1)
 
+            let fitWidth: CGFloat
+            let fitHeight: CGFloat
+            if screenAspect > cropRatio {
+                fitHeight = screenSize.height
+                fitWidth = fitHeight * cropRatio
+            } else {
+                fitWidth = screenSize.width
+                fitHeight = fitWidth / cropRatio
+            }
+
+            CameraPreviewView(session: controller.session)
+                .frame(width: fitWidth, height: fitHeight)
+                .position(x: screenSize.width / 2, y: screenSize.height / 2)
+        }
+        .overlay {
             LinearGradient(
                 colors: [Color.black.opacity(0.68), .clear, .clear, Color.black.opacity(0.74)],
                 startPoint: .top,
                 endPoint: .bottom
             )
         }
+        .animation(.snappy(duration: 0.28), value: controller.settings.aspectRatio)
         .ignoresSafeArea()
     }
 
@@ -455,33 +468,6 @@ private struct ToastLabel: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .glassCapsule(interactive: false)
-    }
-}
-
-private struct AspectRatioGuide: View {
-    let aspectRatio: AspectRatioOption
-
-    var body: some View {
-        GeometryReader { proxy in
-            if let ratio = aspectRatio.previewRatio {
-                let size = fittedSize(for: proxy.size, aspectRatio: ratio)
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(.white.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [7, 9]))
-                    .frame(width: size.width, height: size.height)
-                    .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
-            }
-        }
-    }
-
-    private func fittedSize(for container: CGSize, aspectRatio: CGFloat) -> CGSize {
-        let containerAspect = container.width / max(container.height, 1)
-        if containerAspect > aspectRatio {
-            let height = container.height * 0.8
-            return CGSize(width: height * aspectRatio, height: height)
-        } else {
-            let width = container.width * 0.9
-            return CGSize(width: width, height: width / aspectRatio)
-        }
     }
 }
 

@@ -106,9 +106,6 @@ enum AspectRatioOption: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    var previewRatio: CGFloat? {
-        cropRatio
-    }
 }
 
 enum NightModePreference: String, CaseIterable, Identifiable, Codable {
