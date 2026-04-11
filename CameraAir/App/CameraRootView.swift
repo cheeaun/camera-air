@@ -62,29 +62,35 @@ struct CameraRootView: View {
     }
 
     private var chromeOverlay: some View {
-        VStack(spacing: 0) {
-            topBar
-            Spacer(minLength: 24)
-            if isSettingsExpanded {
-                settingsPanel
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 18)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+        GeometryReader { geometry in
+            let topSafe = geometry.safeAreaInsets.top
+            let bottomSafe = geometry.safeAreaInsets.bottom
+
+            VStack(spacing: 0) {
+                topBar
+                Spacer(minLength: 24)
+                if isSettingsExpanded {
+                    settingsPanel
+                        .padding(.horizontal, 18)
+                        .padding(.bottom, 18)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                bottomBar
             }
-            bottomBar
-        }
-        .padding(.top, 14)
-        .padding(.bottom, 20)
-        .animation(.snappy(duration: 0.28), value: isSettingsExpanded)
-        .animation(.snappy(duration: 0.22), value: controller.mode)
-        .animation(.snappy(duration: 0.22), value: controller.isRecording)
-        .overlay(alignment: .top) {
-            if let message = controller.errorMessage {
-                ToastLabel(message: message)
-                    .padding(.top, 84)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+            .padding(.top, topSafe + 14)
+            .padding(.bottom, bottomSafe + 20)
+            .animation(.snappy(duration: 0.28), value: isSettingsExpanded)
+            .animation(.snappy(duration: 0.22), value: controller.mode)
+            .animation(.snappy(duration: 0.22), value: controller.isRecording)
+            .overlay(alignment: .top) {
+                if let message = controller.errorMessage {
+                    ToastLabel(message: message)
+                        .padding(.top, topSafe + 84)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
         }
+        .ignoresSafeArea()
     }
 
     private var topBar: some View {
