@@ -222,7 +222,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         guard !isOpeningCapture else { return }
         isOpeningCapture = true
 
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
             let authorized = await Self.requestPhotoLibraryAccess(accessLevel: .readWrite)
             guard authorized else {
                 self.showTransientError("Photo Library access is required to view captures.")
@@ -512,7 +514,12 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
             return
         }
 
-        Task {
+        Task { @MainActor [weak self] in
+            guard let self else {
+                try? FileManager.default.removeItem(at: outputFileURL)
+                return
+            }
+
             let authorized = await Self.requestPhotoLibraryAccess()
             guard authorized else {
                 try? FileManager.default.removeItem(at: outputFileURL)
@@ -626,7 +633,9 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
             return
         }
 
-        Task { @MainActor [processedPhotoData, livePhotoMovieURL] in
+        Task { @MainActor [weak self, processedPhotoData, livePhotoMovieURL] in
+            guard let self else { return }
+
             let authorized = await CameraSessionController.requestPhotoLibraryAccess()
             guard authorized else {
                 self.onError("Photo Library access is required to save photos.")

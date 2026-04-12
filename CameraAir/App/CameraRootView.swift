@@ -552,7 +552,7 @@ private extension View {
         case .regular:
             self.glassEffect(.regular.tint(Color.white.opacity(0.12)).interactive(), in: Circle())
         case .prominent:
-            self.glassEffect(.prominent.tint(Color.white.opacity(0.14)).interactive(), in: Circle())
+            self.glassEffect(.regular.tint(Color.white.opacity(0.14)).interactive(), in: Circle())
         }
     }
 }
