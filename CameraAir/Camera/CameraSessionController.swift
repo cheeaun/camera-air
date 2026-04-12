@@ -333,15 +333,15 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             let processor = PhotoCaptureProcessor(
                 aspectRatio: strongSelf.settings.aspectRatio,
                 livePhotoMovieURL: livePhotoURL,
-                onThumbnailReady: { [weak strongSelf] image in
-                    strongSelf?.updateThumbnail(image)
+                onThumbnailReady: { [weak self] image in
+                    self?.updateThumbnail(image)
                 },
-                onError: { [weak strongSelf] message in
-                    strongSelf?.showTransientError(message)
+                onError: { [weak self] message in
+                    self?.showTransientError(message)
                 },
-                onFinish: { [weak strongSelf] in
-                    strongSelf?.publish {
-                        strongSelf?.photoCaptureProcessor = nil
+                onFinish: { [weak self] in
+                    self?.publish {
+                        self?.photoCaptureProcessor = nil
                     }
                 }
             )
