@@ -300,7 +300,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private func capturePhoto() {
         sessionQueue.async { [weak self] in
             guard let strongSelf = self, strongSelf.isConfigured, strongSelf.session.isRunning else { return }
-            let owner = strongSelf
 
             // Prevent capturing if a capture is already in progress
             guard strongSelf.photoCaptureProcessor == nil else { return }
@@ -334,15 +333,15 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             let processor = PhotoCaptureProcessor(
                 aspectRatio: strongSelf.settings.aspectRatio,
                 livePhotoMovieURL: livePhotoURL,
-                onThumbnailReady: { [weak owner] image in
-                    owner?.updateThumbnail(image)
+                onThumbnailReady: { [weak self] image in
+                    self?.updateThumbnail(image)
                 },
-                onError: { [weak owner] message in
-                    owner?.showTransientError(message)
+                onError: { [weak self] message in
+                    self?.showTransientError(message)
                 },
-                onFinish: { [weak owner] in
-                    owner?.publish {
-                        owner?.photoCaptureProcessor = nil
+                onFinish: { [weak self] in
+                    self?.publish {
+                        self?.photoCaptureProcessor = nil
                     }
                 }
             )
