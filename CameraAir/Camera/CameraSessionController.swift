@@ -340,8 +340,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                     self?.showTransientError(message)
                 },
                 onFinish: { [weak self] in
-                    self?.publish {
-                        self?.photoCaptureProcessor = nil
+                    guard let owner = self else { return }
+                    owner.publish {
+                        owner.photoCaptureProcessor = nil
                     }
                 }
             )
