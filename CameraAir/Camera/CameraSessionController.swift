@@ -141,6 +141,11 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
             strongSelf.applyCaptureSettings()
             strongSelf.refreshCapabilities()
+            // Reset zoom to 1x when switching lenses
+            strongSelf.publish {
+                strongSelf.settings.zoomLevel = .standard
+                strongSelf.settings.customZoomFactor = 1.0
+            }
             strongSelf.startRecordingIfNeeded()
         }
     }
@@ -196,6 +201,30 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
     }
 
+    func setZoomLevel(_ zoomLevel: ZoomLevel) {
+        publish {
+            self.settings.zoomLevel = zoomLevel
+            self.settings.customZoomFactor = zoomLevel.factor
+        }
+        saveSettings()
+        sessionQueue.async { [weak self] in
+            self?.applyZoomSettings()
+        }
+    }
+
+    func setCustomZoomFactor(_ factor: CGFloat) {
+        let clampedFactor = min(max(factor, capabilities.minZoomFactor), capabilities.maxZoomFactor)
+        publish {
+            self.settings.customZoomFactor = clampedFactor
+            // Update zoom level based on closest preset
+            self.settings.zoomLevel = ZoomLevel.allCases.min(by: { abs($0.factor - clampedFactor) < abs($1.factor - clampedFactor) }) ?? .standard
+        }
+        saveSettings()
+        sessionQueue.async { [weak self] in
+            self?.applyZoomSettings()
+        }
+    }
+
     func performPrimaryAction() {
         switch mode {
         case .photo:
@@ -223,7 +252,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         isOpeningCapture = true
 
         Task { @MainActor [weak self] in
-            guard let strongSelf = self else { return }
+            guard let strongSelf = self else {
+                return
+            }
 
             let authorized = await Self.requestPhotoLibraryAccess(accessLevel: .readWrite)
             guard authorized else {
@@ -245,7 +276,16 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 return
             }
 
-            strongSelf.latestCaptureAsset = latestAsset
+            // Verify the asset is valid before setting it
+            guard latestAsset.localIdentifier.count > 0 else {
+                strongSelf.showTransientError("Unable to access the latest capture.")
+                strongSelf.isOpeningCapture = false
+                return
+            }
+
+            strongSelf.publish {
+                strongSelf.latestCaptureAsset = latestAsset
+            }
             strongSelf.isOpeningCapture = false
         }
     }
@@ -292,7 +332,10 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             strongSelf.updatePhotoOutputDimensions()
             strongSelf.applyCaptureSettings()
             strongSelf.session.startRunning()
-            strongSelf.refreshCapabilities()
+            // Refresh capabilities after session is running to ensure proper detection
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                strongSelf.refreshCapabilities()
+            }
             strongSelf.startRecordingIfNeeded()
         }
     }
@@ -398,6 +441,22 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         } catch {
             showTransientError("Unable to update camera settings.")
         }
+
+        applyZoomSettings()
+    }
+
+    private func applyZoomSettings() {
+        guard let device = currentVideoInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+            defer { device.unlockForConfiguration() }
+
+            if device.activeFormat.videoSupportedFrameRateRanges.isEmpty == false {
+                device.videoZoomFactor = min(max(settings.customZoomFactor, device.minAvailableVideoZoomFactor), device.maxAvailableVideoZoomFactor)
+            }
+        } catch {
+            showTransientError("Unable to update zoom settings.")
+        }
     }
 
     private func updatePhotoOutputDimensions() {
@@ -412,11 +471,21 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     private func refreshCapabilities() {
         let device = currentVideoInput?.device
+        let minZoom = device?.minAvailableVideoZoomFactor ?? 1.0
+        let maxZoom = device?.maxAvailableVideoZoomFactor ?? 1.0
+
+        var supportedZoomLevels: [ZoomLevel] = [.standard] // Always support 1x
+        if maxZoom >= 2.0 { supportedZoomLevels.append(.telephoto) }
+        if minZoom <= 0.5 { supportedZoomLevels.append(.wide) }
+
         let newCapabilities = CameraCapabilities(
             hasFlash: device?.hasFlash ?? false,
-            supportsLivePhoto: photoOutput.isLivePhotoCaptureSupported,
+            supportsLivePhoto: photoOutput.isLivePhotoCaptureSupported && (device?.position == .back), // Live Photos typically only supported on back camera
             supportsLowLightBoost: device?.isLowLightBoostSupported ?? false,
-            supportsExposureLock: device?.isExposureModeSupported(.locked) ?? false
+            supportsExposureLock: device?.isExposureModeSupported(.locked) ?? false,
+            supportedZoomLevels: supportedZoomLevels,
+            maxZoomFactor: maxZoom,
+            minZoomFactor: minZoom
         )
 
         publish {

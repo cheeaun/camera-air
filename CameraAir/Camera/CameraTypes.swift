@@ -155,25 +155,63 @@ enum NightModePreference: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum ZoomLevel: String, CaseIterable, Identifiable, Codable {
+    case wide
+    case standard
+    case telephoto
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .wide: return "0.5x"
+        case .standard: return "1x"
+        case .telephoto: return "2x"
+        }
+    }
+
+    var factor: CGFloat {
+        switch self {
+        case .wide: return 0.5
+        case .standard: return 1.0
+        case .telephoto: return 2.0
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .wide: return "minus.magnifyingglass"
+        case .standard: return "1.magnifyingglass"
+        case .telephoto: return "plus.magnifyingglass"
+        }
+    }
+}
+
 struct CameraSettings: Equatable, Codable {
     var flash: FlashPreference = .auto
     var isLivePhotoEnabled = true
     var isExposureLocked = false
     var aspectRatio: AspectRatioOption = .portrait34
     var nightMode: NightModePreference = .auto
+    var zoomLevel: ZoomLevel = .standard
+    var customZoomFactor: CGFloat = 1.0
 
     init(
         flash: FlashPreference = .auto,
         isLivePhotoEnabled: Bool = true,
         isExposureLocked: Bool = false,
         aspectRatio: AspectRatioOption = .portrait34,
-        nightMode: NightModePreference = .auto
+        nightMode: NightModePreference = .auto,
+        zoomLevel: ZoomLevel = .standard,
+        customZoomFactor: CGFloat = 1.0
     ) {
         self.flash = flash
         self.isLivePhotoEnabled = isLivePhotoEnabled
         self.isExposureLocked = isExposureLocked
         self.aspectRatio = aspectRatio
         self.nightMode = nightMode
+        self.zoomLevel = zoomLevel
+        self.customZoomFactor = customZoomFactor
     }
 
     init(from decoder: Decoder) throws {
@@ -186,6 +224,8 @@ struct CameraSettings: Equatable, Codable {
         let rawAspectRatio = (try? container.decode(AspectRatioOption.self, forKey: .aspectRatio)) ?? defaults.aspectRatio
         aspectRatio = rawAspectRatio.normalized
         nightMode = (try? container.decode(NightModePreference.self, forKey: .nightMode)) ?? defaults.nightMode
+        zoomLevel = (try? container.decode(ZoomLevel.self, forKey: .zoomLevel)) ?? defaults.zoomLevel
+        customZoomFactor = (try? container.decode(CGFloat.self, forKey: .customZoomFactor)) ?? defaults.customZoomFactor
     }
 }
 
@@ -194,6 +234,9 @@ struct CameraCapabilities: Equatable {
     var supportsLivePhoto = false
     var supportsLowLightBoost = false
     var supportsExposureLock = false
+    var supportedZoomLevels: [ZoomLevel] = [.standard]
+    var maxZoomFactor: CGFloat = 1.0
+    var minZoomFactor: CGFloat = 1.0
 }
 
 struct CameraRoute: Equatable {

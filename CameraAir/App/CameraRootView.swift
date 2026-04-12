@@ -71,6 +71,13 @@ struct CameraRootView: View {
                 endPoint: .bottom
             )
         }
+        .gesture(
+            MagnificationGesture()
+                .onChanged { scale in
+                    let newFactor = controller.settings.customZoomFactor * scale
+                    controller.setCustomZoomFactor(newFactor)
+                }
+        )
         .animation(.snappy(duration: 0.28), value: controller.settings.aspectRatio)
         .ignoresSafeArea()
     }
@@ -190,9 +197,10 @@ struct CameraRootView: View {
             ModeStrip(selection: controller.mode, onSelect: controller.setMode)
                 .padding(.horizontal, 24)
 
-            HStack(alignment: .center, spacing: 26) {
+            HStack(alignment: .center, spacing: 16) {
                 thumbnailButton
                 captureButton
+                zoomControls
                 lensButton
             }
             .padding(.horizontal, 22)
@@ -272,23 +280,24 @@ struct CameraRootView: View {
         } label: {
             ZStack {
                 Circle()
-                    .glassEffect(.regular.tint(Color.white.opacity(0.06)), in: .rect)
-                    .frame(width: 92, height: 92)
+                    .fill(Color.white.opacity(0.08))
+                    .frame(width: 84, height: 84)
+                    .glassEffect(.regular.tint(Color.white.opacity(0.04)), in: .rect)
 
                 Circle()
-                    .strokeBorder(.white.opacity(0.42), lineWidth: 2)
-                    .frame(width: 86, height: 86)
+                    .strokeBorder(.white.opacity(0.3), lineWidth: 2)
+                    .frame(width: 84, height: 84)
 
                 if controller.mode == .video && controller.isRecording {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Color.red)
-                        .frame(width: 34, height: 34)
-                        .glassEffectIfAvailable(prominence: .regular)
+                        .frame(width: 32, height: 32)
+                        .glassEffect(.regular.tint(Color.white.opacity(0.1)), in: .rect)
                 } else {
                     Circle()
                         .fill(controller.mode == .video ? Color.red : Color.white)
-                        .frame(width: controller.mode == .video ? 62 : 68, height: controller.mode == .video ? 62 : 68)
-                        .glassEffectIfAvailable(prominence: controller.mode == .video ? .regular : .prominent)
+                        .frame(width: controller.mode == .video ? 58 : 64, height: controller.mode == .video ? 58 : 64)
+                        .glassEffect(.regular.tint(controller.mode == .video ? Color.white.opacity(0.1) : Color.white.opacity(0.15)), in: .rect)
                 }
             }
         }
@@ -312,6 +321,40 @@ struct CameraRootView: View {
         }
         .buttonStyle(.plain)
         .glassCapsule(interactive: true)
+    }
+
+    private var zoomControls: some View {
+        VStack(spacing: 8) {
+            ForEach(controller.capabilities.supportedZoomLevels) { level in
+                Button {
+                    controller.setZoomLevel(level)
+                } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: level.systemImage)
+                            .font(.system(size: 16, weight: .semibold))
+                        Text(level.title)
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    }
+                    .foregroundStyle(controller.settings.zoomLevel == level ? .white : .white.opacity(0.6))
+                    .frame(width: 44, height: 44)
+                    .background {
+                        if controller.settings.zoomLevel == level {
+                            Circle()
+                                .fill(Color.white.opacity(0.2))
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .glassCapsule(interactive: true)
+            }
+
+            if controller.capabilities.maxZoomFactor > 1.0 {
+                Text(String(format: "%.1fx", controller.settings.customZoomFactor))
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .padding(.vertical, 2)
+            }
+        }
     }
 
     private var permissionOverlay: some View {
@@ -347,34 +390,35 @@ private struct ModeStrip: View {
     let onSelect: (CaptureMode) -> Void
 
     var body: some View {
-        GlassEffectContainer(spacing: 4) {
-            HStack(spacing: 4) {
-                ForEach(CaptureMode.allCases) { mode in
-                    Button {
-                        onSelect(mode)
-                    } label: {
-                        Text(mode.title.uppercased())
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .tracking(0.6)
-                            .foregroundStyle(selection == mode ? .black : .white.opacity(0.86))
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 10)
-                            .frame(maxWidth: .infinity)
-                            .background {
-                                if selection == mode {
-                                    Capsule()
-                                        .fill(Color.white.opacity(0.92))
-                                        .matchedGeometryEffect(id: "mode-selection", in: selectionNamespace)
-                                }
+        HStack(spacing: 0) {
+            ForEach(CaptureMode.allCases) { mode in
+                Button {
+                    onSelect(mode)
+                } label: {
+                    Text(mode.title.uppercased())
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .tracking(0.6)
+                        .foregroundStyle(selection == mode ? .white : .white.opacity(0.6))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity)
+                        .background {
+                            if selection == mode {
+                                Capsule()
+                                    .fill(Color.white.opacity(0.2))
+                                    .matchedGeometryEffect(id: "mode-selection", in: selectionNamespace)
                             }
-                            .glassEffect(.regular.tint(Color.white.opacity(0.04)).interactive(), in: Capsule())
-                    }
-                    .buttonStyle(.plain)
+                        }
                 }
+                .buttonStyle(.plain)
             }
-            .padding(5)
-            .glassEffect(.regular.tint(Color.white.opacity(0.06)), in: Capsule())
         }
+        .padding(2)
+        .background {
+            Capsule()
+                .fill(Color.white.opacity(0.1))
+        }
+        .glassEffect(.regular.tint(Color.white.opacity(0.05)), in: Capsule())
     }
 }
 
