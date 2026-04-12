@@ -50,41 +50,41 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         hasPrepared = true
 
         Task { [weak self] in
-            guard let self else { return }
+            guard let strongSelf = self else { return }
 
             let cameraGranted = await Self.requestAccess(for: .video)
             let microphoneGranted = await Self.requestAccess(for: .audio)
 
-            self.publish {
-                self.isCameraAccessDenied = !cameraGranted
+            strongSelf.publish {
+                strongSelf.isCameraAccessDenied = !cameraGranted
             }
 
             guard cameraGranted else {
-                self.publish {
-                    self.errorMessage = "Camera access is unavailable."
+                strongSelf.publish {
+                    strongSelf.errorMessage = "Camera access is unavailable."
                 }
                 return
             }
 
-            self.configureSessionIfNeeded(includeAudio: microphoneGranted)
+            strongSelf.configureSessionIfNeeded(includeAudio: microphoneGranted)
         }
     }
 
     func resumeSession() {
         sessionQueue.async { [weak self] in
-            guard let self, self.isConfigured, !self.session.isRunning else { return }
-            self.session.startRunning()
-            self.startRecordingIfNeeded()
+            guard let strongSelf = self, strongSelf.isConfigured, !strongSelf.session.isRunning else { return }
+            strongSelf.session.startRunning()
+            strongSelf.startRecordingIfNeeded()
         }
     }
 
     func pauseSession() {
         sessionQueue.async { [weak self] in
-            guard let self, self.session.isRunning else { return }
-            if self.movieOutput.isRecording {
-                self.movieOutput.stopRecording()
+            guard let strongSelf = self, strongSelf.session.isRunning else { return }
+            if strongSelf.movieOutput.isRecording {
+                strongSelf.movieOutput.stopRecording()
             }
-            self.session.stopRunning()
+            strongSelf.session.stopRunning()
         }
     }
 
@@ -94,13 +94,13 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
 
         sessionQueue.async { [weak self] in
-            guard let self else { return }
-            self.session.beginConfiguration()
-            self.session.sessionPreset = mode == .photo ? .photo : .high
-            self.session.commitConfiguration()
-            self.updatePhotoOutputDimensions()
-            self.applyCaptureSettings()
-            self.startRecordingIfNeeded()
+            guard let strongSelf = self else { return }
+            strongSelf.session.beginConfiguration()
+            strongSelf.session.sessionPreset = mode == .photo ? .photo : .high
+            strongSelf.session.commitConfiguration()
+            strongSelf.updatePhotoOutputDimensions()
+            strongSelf.applyCaptureSettings()
+            strongSelf.startRecordingIfNeeded()
         }
     }
 
@@ -114,34 +114,34 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
 
         sessionQueue.async { [weak self] in
-            guard let self else { return }
-            let previousInput = self.currentVideoInput
+            guard let strongSelf = self else { return }
+            let previousInput = strongSelf.currentVideoInput
             guard previousInput?.device.position != lens.capturePosition else { return }
-            guard let device = self.discoverDevice(for: lens.capturePosition),
+            guard let device = strongSelf.discoverDevice(for: lens.capturePosition),
                   let replacementInput = try? AVCaptureDeviceInput(device: device) else {
-                self.publish {
-                    self.errorMessage = "This camera is not available."
+                strongSelf.publish {
+                    strongSelf.errorMessage = "This camera is not available."
                 }
                 return
             }
 
-            self.session.beginConfiguration()
+            strongSelf.session.beginConfiguration()
             if let previousInput {
-                self.session.removeInput(previousInput)
+                strongSelf.session.removeInput(previousInput)
             }
 
-            if self.session.canAddInput(replacementInput) {
-                self.session.addInput(replacementInput)
-                self.currentVideoInput = replacementInput
-            } else if let previousInput, self.session.canAddInput(previousInput) {
-                self.session.addInput(previousInput)
-                self.currentVideoInput = previousInput
+            if strongSelf.session.canAddInput(replacementInput) {
+                strongSelf.session.addInput(replacementInput)
+                strongSelf.currentVideoInput = replacementInput
+            } else if let previousInput, strongSelf.session.canAddInput(previousInput) {
+                strongSelf.session.addInput(previousInput)
+                strongSelf.currentVideoInput = previousInput
             }
-            self.session.commitConfiguration()
+            strongSelf.session.commitConfiguration()
 
-            self.applyCaptureSettings()
-            self.refreshCapabilities()
-            self.startRecordingIfNeeded()
+            strongSelf.applyCaptureSettings()
+            strongSelf.refreshCapabilities()
+            strongSelf.startRecordingIfNeeded()
         }
     }
 
@@ -223,12 +223,12 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         isOpeningCapture = true
 
         Task { @MainActor [weak self] in
-            guard let self else { return }
+            guard let strongSelf = self else { return }
 
             let authorized = await Self.requestPhotoLibraryAccess(accessLevel: .readWrite)
             guard authorized else {
-                self.showTransientError("Photo Library access is required to view captures.")
-                self.isOpeningCapture = false
+                strongSelf.showTransientError("Photo Library access is required to view captures.")
+                strongSelf.isOpeningCapture = false
                 return
             }
 
@@ -240,13 +240,13 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             let result = PHAsset.fetchAssets(with: options)
 
             guard let latestAsset = result.firstObject else {
-                self.showTransientError("No captures found.")
-                self.isOpeningCapture = false
+                strongSelf.showTransientError("No captures found.")
+                strongSelf.isOpeningCapture = false
                 return
             }
 
-            self.latestCaptureAsset = latestAsset
-            self.isOpeningCapture = false
+            strongSelf.latestCaptureAsset = latestAsset
+            strongSelf.isOpeningCapture = false
         }
     }
 
@@ -258,72 +258,72 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     private func configureSessionIfNeeded(includeAudio: Bool) {
         sessionQueue.async { [weak self] in
-            guard let self, !self.isConfigured else { return }
+            guard let strongSelf = self, !strongSelf.isConfigured else { return }
 
-            self.session.beginConfiguration()
-            self.session.sessionPreset = .photo
+            strongSelf.session.beginConfiguration()
+            strongSelf.session.sessionPreset = .photo
 
-            if let videoDevice = self.discoverDevice(for: self.lens.capturePosition),
+            if let videoDevice = strongSelf.discoverDevice(for: strongSelf.lens.capturePosition),
                let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
-               self.session.canAddInput(videoInput) {
-                self.session.addInput(videoInput)
-                self.currentVideoInput = videoInput
+               strongSelf.session.canAddInput(videoInput) {
+                strongSelf.session.addInput(videoInput)
+                strongSelf.currentVideoInput = videoInput
             }
 
             if includeAudio,
                let audioDevice = AVCaptureDevice.default(for: .audio),
                let audioInput = try? AVCaptureDeviceInput(device: audioDevice),
-               self.session.canAddInput(audioInput) {
-                self.session.addInput(audioInput)
-                self.currentAudioInput = audioInput
+               strongSelf.session.canAddInput(audioInput) {
+                strongSelf.session.addInput(audioInput)
+                strongSelf.currentAudioInput = audioInput
             }
 
-            if self.session.canAddOutput(self.photoOutput) {
-                self.session.addOutput(self.photoOutput)
-                self.photoOutput.maxPhotoQualityPrioritization = .speed
+            if strongSelf.session.canAddOutput(strongSelf.photoOutput) {
+                strongSelf.session.addOutput(strongSelf.photoOutput)
+                strongSelf.photoOutput.maxPhotoQualityPrioritization = .speed
             }
 
-            if self.session.canAddOutput(self.movieOutput) {
-                self.session.addOutput(self.movieOutput)
+            if strongSelf.session.canAddOutput(strongSelf.movieOutput) {
+                strongSelf.session.addOutput(strongSelf.movieOutput)
             }
 
-            self.session.commitConfiguration()
-            self.isConfigured = true
-            self.updatePhotoOutputDimensions()
-            self.applyCaptureSettings()
-            self.session.startRunning()
-            self.refreshCapabilities()
-            self.startRecordingIfNeeded()
+            strongSelf.session.commitConfiguration()
+            strongSelf.isConfigured = true
+            strongSelf.updatePhotoOutputDimensions()
+            strongSelf.applyCaptureSettings()
+            strongSelf.session.startRunning()
+            strongSelf.refreshCapabilities()
+            strongSelf.startRecordingIfNeeded()
         }
     }
 
     private func capturePhoto() {
         sessionQueue.async { [weak self] in
-            guard let self, self.isConfigured, self.session.isRunning else { return }
+            guard let strongSelf = self, strongSelf.isConfigured, strongSelf.session.isRunning else { return }
 
             // Prevent capturing if a capture is already in progress
-            guard self.photoCaptureProcessor == nil else { return }
+            guard strongSelf.photoCaptureProcessor == nil else { return }
 
             let format: [String: Any]
-            if self.photoOutput.availablePhotoCodecTypes.contains(.hevc) {
+            if strongSelf.photoOutput.availablePhotoCodecTypes.contains(.hevc) {
                 format = [AVVideoCodecKey: AVVideoCodecType.hevc]
             } else {
                 format = [AVVideoCodecKey: AVVideoCodecType.jpeg]
             }
 
             let photoSettings = AVCapturePhotoSettings(format: format)
-            if self.capabilities.hasFlash, let device = self.currentVideoInput?.device, device.hasFlash {
-                photoSettings.flashMode = self.settings.flash.avFlashMode
+            if strongSelf.capabilities.hasFlash, let device = strongSelf.currentVideoInput?.device, device.hasFlash {
+                photoSettings.flashMode = strongSelf.settings.flash.avFlashMode
             }
             photoSettings.photoQualityPrioritization = .speed
 
-            let maxDimensions = self.photoOutput.maxPhotoDimensions
+            let maxDimensions = strongSelf.photoOutput.maxPhotoDimensions
             if maxDimensions.width > 0 && maxDimensions.height > 0 {
                 photoSettings.maxPhotoDimensions = maxDimensions
             }
 
             let livePhotoURL: URL?
-            if self.photoOutput.isLivePhotoCaptureSupported && self.photoOutput.isLivePhotoCaptureEnabled && self.settings.isLivePhotoEnabled {
+            if strongSelf.photoOutput.isLivePhotoCaptureSupported && strongSelf.photoOutput.isLivePhotoCaptureEnabled && strongSelf.settings.isLivePhotoEnabled {
                 livePhotoURL = Self.temporaryFileURL(pathExtension: "mov")
                 photoSettings.livePhotoMovieFileURL = livePhotoURL
             } else {
@@ -331,42 +331,42 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             }
 
             let processor = PhotoCaptureProcessor(
-                aspectRatio: self.settings.aspectRatio,
+                aspectRatio: strongSelf.settings.aspectRatio,
                 livePhotoMovieURL: livePhotoURL,
-                onThumbnailReady: { [weak self] image in
-                    self?.updateThumbnail(image)
+                onThumbnailReady: { [weak strongSelf] image in
+                    strongSelf?.updateThumbnail(image)
                 },
-                onError: { [weak self] message in
-                    self?.showTransientError(message)
+                onError: { [weak strongSelf] message in
+                    strongSelf?.showTransientError(message)
                 },
-                onFinish: { [weak self] in
-                    self?.publish {
-                        self?.photoCaptureProcessor = nil
+                onFinish: { [weak strongSelf] in
+                    strongSelf?.publish {
+                        strongSelf?.photoCaptureProcessor = nil
                     }
                 }
             )
 
-            self.photoCaptureProcessor = processor
-            self.photoOutput.capturePhoto(with: photoSettings, delegate: processor)
+            strongSelf.photoCaptureProcessor = processor
+            strongSelf.photoOutput.capturePhoto(with: photoSettings, delegate: processor)
         }
     }
 
     private func startRecording() {
         sessionQueue.async { [weak self] in
-            guard let self, self.isConfigured, !self.movieOutput.isRecording else { return }
+            guard let strongSelf = self, strongSelf.isConfigured, !strongSelf.movieOutput.isRecording else { return }
             let outputURL = Self.temporaryFileURL(pathExtension: "mov")
-            self.applyTorchState(isEnabled: self.settings.flash == .on)
-            self.movieOutput.startRecording(to: outputURL, recordingDelegate: self)
-            self.publish {
-                self.isRecording = true
+            strongSelf.applyTorchState(isEnabled: strongSelf.settings.flash == .on)
+            strongSelf.movieOutput.startRecording(to: outputURL, recordingDelegate: strongSelf)
+            strongSelf.publish {
+                strongSelf.isRecording = true
             }
         }
     }
 
     private func stopRecording() {
         sessionQueue.async { [weak self] in
-            guard let self, self.movieOutput.isRecording else { return }
-            self.movieOutput.stopRecording()
+            guard let strongSelf = self, strongSelf.movieOutput.isRecording else { return }
+            strongSelf.movieOutput.stopRecording()
         }
     }
 
@@ -515,7 +515,7 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
         }
 
         Task { @MainActor [weak self] in
-            guard let self else {
+            guard let strongSelf = self else {
                 try? FileManager.default.removeItem(at: outputFileURL)
                 return
             }
@@ -523,16 +523,16 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
             let authorized = await Self.requestPhotoLibraryAccess()
             guard authorized else {
                 try? FileManager.default.removeItem(at: outputFileURL)
-                self.showTransientError("Photo Library access is required to save video.")
+                strongSelf.showTransientError("Photo Library access is required to save video.")
                 return
             }
 
             do {
                 try await Self.saveVideoToLibrary(from: outputFileURL)
                 let thumbnail = try? await Self.makeVideoThumbnail(from: outputFileURL)
-                self.updateThumbnail(thumbnail)
+                strongSelf.updateThumbnail(thumbnail)
             } catch {
-                self.showTransientError("Unable to save the video.")
+                strongSelf.showTransientError("Unable to save the video.")
             }
 
             try? FileManager.default.removeItem(at: outputFileURL)
@@ -634,23 +634,23 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
         }
 
         Task { @MainActor [weak self, processedPhotoData, livePhotoMovieURL] in
-            guard let self else { return }
+            guard let strongSelf = self else { return }
 
             let authorized = await CameraSessionController.requestPhotoLibraryAccess()
             guard authorized else {
-                self.onError("Photo Library access is required to save photos.")
-                self.cleanup()
+                strongSelf.onError("Photo Library access is required to save photos.")
+                strongSelf.cleanup()
                 return
             }
 
             do {
                 try await Self.savePhotoToLibrary(photoData: processedPhotoData, livePhotoMovieURL: livePhotoMovieURL)
-                self.onThumbnailReady(UIImage(data: processedPhotoData))
+                strongSelf.onThumbnailReady(UIImage(data: processedPhotoData))
             } catch {
-                self.onError("Unable to save the photo.")
+                strongSelf.onError("Unable to save the photo.")
             }
 
-            self.cleanup()
+            strongSelf.cleanup()
         }
     }
 
