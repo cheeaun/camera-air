@@ -79,6 +79,12 @@ struct CameraRootView: View {
         VStack(spacing: 0) {
             topBar
             Spacer(minLength: 24)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if isSettingsExpanded {
+                        isSettingsExpanded = false
+                    }
+                }
             if isSettingsExpanded {
                 settingsPanel
                     .padding(.horizontal, 18)
@@ -108,17 +114,6 @@ struct CameraRootView: View {
                 isEnabled: controller.capabilities.hasFlash,
                 onSelect: controller.setFlash
             )
-
-            if controller.mode == .photo {
-                ToggleChip(
-                    title: "Live",
-                    icon: controller.settings.isLivePhotoEnabled ? "livephoto" : "livephoto.slash",
-                    isOn: controller.settings.isLivePhotoEnabled,
-                    isEnabled: controller.capabilities.supportsLivePhoto
-                ) {
-                    controller.toggleLivePhoto()
-                }
-            }
 
             ToggleChip(
                 title: controller.settings.isExposureLocked ? "Locked" : "Exposure",
@@ -198,11 +193,28 @@ struct CameraRootView: View {
 
     private var statusRow: some View {
         HStack(spacing: 8) {
-            StatusPill(text: controller.lens.title, systemImage: controller.lens == .back ? "camera.fill" : "camera.rotate")
-            StatusPill(text: controller.settings.aspectRatio.title, systemImage: "rectangle.compress.vertical")
-            if controller.mode == .photo && controller.settings.isLivePhotoEnabled {
-                StatusPill(text: "Live", systemImage: "livephoto")
+            Button {
+                controller.cycleAspectRatio()
+            } label: {
+                StatusPill(text: controller.settings.aspectRatio.title, systemImage: "rectangle.compress.vertical")
             }
+            .buttonStyle(.plain)
+
+            if controller.mode == .photo {
+                Button {
+                    controller.toggleLivePhoto()
+                } label: {
+                    StatusPill(
+                        text: "Live",
+                        systemImage: controller.settings.isLivePhotoEnabled ? "livephoto" : "livephoto.slash",
+                        isEnabled: controller.capabilities.supportsLivePhoto,
+                        isActive: controller.settings.isLivePhotoEnabled
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(!controller.capabilities.supportsLivePhoto)
+            }
+
             if controller.mode == .video {
                 StatusPill(text: controller.isRecording ? "Recording" : "Ready", systemImage: controller.isRecording ? "record.circle.fill" : "video.fill")
             }
@@ -281,7 +293,7 @@ struct CameraRootView: View {
             VStack(spacing: 6) {
                 Image(systemName: "arrow.triangle.2.circlepath.camera")
                     .font(.system(size: 21, weight: .semibold))
-                Text("Flip")
+                Text(controller.lens.title)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
             }
             .foregroundStyle(.white)
@@ -439,6 +451,8 @@ private struct OptionStrip<Option: Hashable & Identifiable>: View {
 private struct StatusPill: View {
     let text: String
     let systemImage: String
+    var isEnabled: Bool = true
+    var isActive: Bool = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -446,10 +460,10 @@ private struct StatusPill: View {
             Text(text)
         }
         .font(.system(size: 12, weight: .semibold, design: .rounded))
-        .foregroundStyle(.white.opacity(0.86))
+        .foregroundStyle(.white.opacity(isEnabled ? 0.86 : 0.4))
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .glassCapsule(interactive: false)
+        .glassCapsule(interactive: true, isActive: isActive)
     }
 }
 
@@ -584,7 +598,10 @@ private struct CaptureViewer: View {
             let options = PHVideoRequestOptions()
             options.isNetworkAccessAllowed = true
             let url = await withCheckedContinuation { (continuation: CheckedContinuation<URL?, Never>) in
+                var didResume = false
                 PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
+                    guard !didResume else { return }
+                    didResume = true
                     if let urlAsset = avAsset as? AVURLAsset {
                         continuation.resume(returning: urlAsset.url)
                     } else {
@@ -603,12 +620,16 @@ private struct CaptureViewer: View {
             options.isNetworkAccessAllowed = true
             options.deliveryMode = .highQualityFormat
             let result = await withCheckedContinuation { (continuation: CheckedContinuation<UIImage?, Never>) in
+                var didResume = false
                 PHImageManager.default().requestImage(
                     for: asset,
                     targetSize: PHImageManagerMaximumSize,
                     contentMode: .default,
                     options: options
-                ) { image, _ in
+                ) { image, info in
+                    let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
+                    guard !isDegraded, !didResume else { return }
+                    didResume = true
                     continuation.resume(returning: image)
                 }
             }

@@ -79,8 +79,10 @@ enum FlashPreference: String, CaseIterable, Identifiable, Codable {
 
 enum AspectRatioOption: String, CaseIterable, Identifiable, Codable {
     case standard
+    case classic
     case square
     case widescreen
+    case vertical
 
     var id: String { rawValue }
 
@@ -88,10 +90,14 @@ enum AspectRatioOption: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .standard:
             return "4:3"
+        case .classic:
+            return "3:2"
         case .square:
             return "1:1"
         case .widescreen:
             return "16:9"
+        case .vertical:
+            return "9:16"
         }
     }
 
@@ -99,10 +105,14 @@ enum AspectRatioOption: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .standard:
             return 4.0 / 3.0
+        case .classic:
+            return 3.0 / 2.0
         case .square:
             return 1.0
         case .widescreen:
             return 16.0 / 9.0
+        case .vertical:
+            return 9.0 / 16.0
         }
     }
 
@@ -126,6 +136,30 @@ struct CameraSettings: Equatable, Codable {
     var isExposureLocked = false
     var aspectRatio: AspectRatioOption = .standard
     var nightMode: NightModePreference = .auto
+
+    init(
+        flash: FlashPreference = .auto,
+        isLivePhotoEnabled: Bool = true,
+        isExposureLocked: Bool = false,
+        aspectRatio: AspectRatioOption = .standard,
+        nightMode: NightModePreference = .auto
+    ) {
+        self.flash = flash
+        self.isLivePhotoEnabled = isLivePhotoEnabled
+        self.isExposureLocked = isExposureLocked
+        self.aspectRatio = aspectRatio
+        self.nightMode = nightMode
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = CameraSettings()
+        flash = (try? container.decode(FlashPreference.self, forKey: .flash)) ?? defaults.flash
+        isLivePhotoEnabled = (try? container.decode(Bool.self, forKey: .isLivePhotoEnabled)) ?? defaults.isLivePhotoEnabled
+        isExposureLocked = (try? container.decode(Bool.self, forKey: .isExposureLocked)) ?? defaults.isExposureLocked
+        aspectRatio = (try? container.decode(AspectRatioOption.self, forKey: .aspectRatio)) ?? defaults.aspectRatio
+        nightMode = (try? container.decode(NightModePreference.self, forKey: .nightMode)) ?? defaults.nightMode
+    }
 }
 
 struct CameraCapabilities: Equatable {

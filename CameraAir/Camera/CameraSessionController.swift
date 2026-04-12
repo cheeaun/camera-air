@@ -15,6 +15,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     let session = AVCaptureSession()
 
+    private static let settingsKey = "CameraAir.Settings"
+
     private let sessionQueue = DispatchQueue(label: "CameraAir.SessionQueue")
     private let photoOutput = AVCapturePhotoOutput()
     private let movieOutput = AVCaptureMovieFileOutput()
@@ -26,6 +28,22 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private var hasPrepared = false
     private var pendingRoute: CameraRoute?
     private var isOpeningCapture = false
+
+    override init() {
+        super.init()
+        loadSettings()
+    }
+
+    private func loadSettings() {
+        guard let data = UserDefaults.standard.data(forKey: Self.settingsKey),
+              let decoded = try? JSONDecoder().decode(CameraSettings.self, from: data) else { return }
+        settings = decoded
+    }
+
+    private func saveSettings() {
+        guard let data = try? JSONEncoder().encode(settings) else { return }
+        UserDefaults.standard.set(data, forKey: Self.settingsKey)
+    }
 
     func prepare() {
         guard !hasPrepared else { return }
@@ -131,12 +149,14 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         publish {
             self.settings.flash = flash
         }
+        saveSettings()
     }
 
     func toggleLivePhoto() {
         publish {
             self.settings.isLivePhotoEnabled.toggle()
         }
+        saveSettings()
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
         }
@@ -146,6 +166,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         publish {
             self.settings.isExposureLocked.toggle()
         }
+        saveSettings()
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
         }
@@ -155,12 +176,21 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         publish {
             self.settings.aspectRatio = aspectRatio
         }
+        saveSettings()
+    }
+
+    func cycleAspectRatio() {
+        let allCases = AspectRatioOption.allCases
+        guard let currentIndex = allCases.firstIndex(of: settings.aspectRatio) else { return }
+        let nextIndex = (currentIndex + 1) % allCases.count
+        setAspectRatio(allCases[nextIndex])
     }
 
     func setNightMode(_ nightMode: NightModePreference) {
         publish {
             self.settings.nightMode = nightMode
         }
+        saveSettings()
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
         }
@@ -261,8 +291,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             self.isConfigured = true
             self.updatePhotoOutputDimensions()
             self.applyCaptureSettings()
-            self.refreshCapabilities()
             self.session.startRunning()
+            self.refreshCapabilities()
             self.startRecordingIfNeeded()
         }
     }
