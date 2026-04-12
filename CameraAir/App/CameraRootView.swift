@@ -623,7 +623,16 @@ private struct CaptureViewer: View {
             options.isNetworkAccessAllowed = true
             options.deliveryMode = .automatic
 
-            let avAsset = try? await PHImageManager.default().requestAVAsset(forVideo: asset, options: options)
+            let avAsset = await withCheckedContinuation { (continuation: CheckedContinuation<AVAsset?, Never>) in
+                var didResume = false
+                PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
+                    guard !didResume else { return }
+                    didResume = true
+                    DispatchQueue.main.async {
+                        continuation.resume(returning: avAsset)
+                    }
+                }
+            }
 
             if let avAsset {
                 let playerItem = AVPlayerItem(asset: avAsset)
@@ -636,12 +645,23 @@ private struct CaptureViewer: View {
             options.deliveryMode = .highQualityFormat
             options.resizeMode = .none
 
-            let (result, _) = try? await PHImageManager.default().requestImage(
-                for: asset,
-                targetSize: PHImageManagerMaximumSize,
-                contentMode: .default,
-                options: options
-            )
+            let result = await withCheckedContinuation { (continuation: CheckedContinuation<UIImage?, Never>) in
+                var didResume = false
+                PHImageManager.default().requestImage(
+                    for: asset,
+                    targetSize: PHImageManagerMaximumSize,
+                    contentMode: .default,
+                    options: options
+                ) { image, info in
+                    let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
+                    let isCancelled = (info?[PHImageCancelledKey] as? Bool) ?? false
+                    guard !isDegraded, !isCancelled, !didResume else { return }
+                    didResume = true
+                    DispatchQueue.main.async {
+                        continuation.resume(returning: image)
+                    }
+                }
+            }
 
             self.image = result
         }
