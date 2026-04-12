@@ -628,8 +628,9 @@ private struct CaptureViewer: View {
                 PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
                     guard !didResume else { return }
                     didResume = true
-                    let asset = avAsset
-                    continuation.resume(returning: asset)
+                    Task { @MainActor in
+                        continuation.resume(returning: avAsset)
+                    }
                 }
             }
 
@@ -656,8 +657,9 @@ private struct CaptureViewer: View {
                     let isCancelled = (info?[PHImageCancelledKey] as? Bool) ?? false
                     guard !isDegraded, !isCancelled, !didResume else { return }
                     didResume = true
-                    let result = image
-                    continuation.resume(returning: result)
+                    Task { @MainActor in
+                        continuation.resume(returning: image)
+                    }
                 }
             }
 
