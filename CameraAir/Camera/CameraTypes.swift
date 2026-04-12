@@ -78,44 +78,69 @@ enum FlashPreference: String, CaseIterable, Identifiable, Codable {
 }
 
 enum AspectRatioOption: String, CaseIterable, Identifiable, Codable {
-    case standard
-    case classic
-    case square
-    case widescreen
-    case vertical
+    case portrait34 = "portrait34"
+    case portrait916 = "portrait916"
+    case square = "square"
+    case classic32 = "classic32"
+    case standard43 = "standard43"
+    case widescreen169 = "widescreen169"
+
+    // Legacy case mapping for stored settings
+    case standard = "standard"
+    case classic = "classic"
+    case widescreen = "widescreen"
+    case vertical = "vertical"
+
+    static var allCases: [AspectRatioOption] {
+        [.portrait34, .portrait916, .square, .classic32, .standard43, .widescreen169]
+    }
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .standard:
-            return "4:3"
-        case .classic:
-            return "3:2"
+        case .portrait34:
+            return "3:4"
+        case .portrait916, .vertical:
+            return "9:16"
         case .square:
             return "1:1"
-        case .widescreen:
+        case .classic32, .classic:
+            return "3:2"
+        case .standard43, .standard:
+            return "4:3"
+        case .widescreen169, .widescreen:
             return "16:9"
-        case .vertical:
-            return "9:16"
         }
     }
 
     var cropRatio: CGFloat {
         switch self {
-        case .standard:
-            return 4.0 / 3.0
-        case .classic:
-            return 3.0 / 2.0
+        case .portrait34:
+            return 3.0 / 4.0
+        case .portrait916, .vertical:
+            return 9.0 / 16.0
         case .square:
             return 1.0
-        case .widescreen:
+        case .classic32, .classic:
+            return 3.0 / 2.0
+        case .standard43, .standard:
+            return 4.0 / 3.0
+        case .widescreen169, .widescreen:
             return 16.0 / 9.0
-        case .vertical:
-            return 9.0 / 16.0
         }
     }
 
+    /// Normalize legacy values to current cases
+    var normalized: AspectRatioOption {
+        switch self {
+        case .standard: return .standard43
+        case .classic: return .classic32
+        case .widescreen: return .widescreen169
+        case .vertical: return .portrait916
+        default: return self
+        }
+    }
 }
 
 enum NightModePreference: String, CaseIterable, Identifiable, Codable {
@@ -134,14 +159,14 @@ struct CameraSettings: Equatable, Codable {
     var flash: FlashPreference = .auto
     var isLivePhotoEnabled = true
     var isExposureLocked = false
-    var aspectRatio: AspectRatioOption = .standard
+    var aspectRatio: AspectRatioOption = .portrait34
     var nightMode: NightModePreference = .auto
 
     init(
         flash: FlashPreference = .auto,
         isLivePhotoEnabled: Bool = true,
         isExposureLocked: Bool = false,
-        aspectRatio: AspectRatioOption = .standard,
+        aspectRatio: AspectRatioOption = .portrait34,
         nightMode: NightModePreference = .auto
     ) {
         self.flash = flash
@@ -157,7 +182,9 @@ struct CameraSettings: Equatable, Codable {
         flash = (try? container.decode(FlashPreference.self, forKey: .flash)) ?? defaults.flash
         isLivePhotoEnabled = (try? container.decode(Bool.self, forKey: .isLivePhotoEnabled)) ?? defaults.isLivePhotoEnabled
         isExposureLocked = (try? container.decode(Bool.self, forKey: .isExposureLocked)) ?? defaults.isExposureLocked
-        aspectRatio = (try? container.decode(AspectRatioOption.self, forKey: .aspectRatio)) ?? defaults.aspectRatio
+        // Normalize legacy aspect ratio values
+        let rawAspectRatio = (try? container.decode(AspectRatioOption.self, forKey: .aspectRatio)) ?? defaults.aspectRatio
+        aspectRatio = rawAspectRatio.normalized
         nightMode = (try? container.decode(NightModePreference.self, forKey: .nightMode)) ?? defaults.nightMode
     }
 }

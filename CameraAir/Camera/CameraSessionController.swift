@@ -222,7 +222,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         guard !isOpeningCapture else { return }
         isOpeningCapture = true
 
-        Task {
+        Task { @MainActor in
             let authorized = await Self.requestPhotoLibraryAccess(accessLevel: .readWrite)
             guard authorized else {
                 self.showTransientError("Photo Library access is required to view captures.")
@@ -243,10 +243,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 return
             }
 
-            self.publish {
-                self.latestCaptureAsset = latestAsset
-                self.isOpeningCapture = false
-            }
+            self.latestCaptureAsset = latestAsset
+            self.isOpeningCapture = false
         }
     }
 
@@ -299,7 +297,10 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     private func capturePhoto() {
         sessionQueue.async { [weak self] in
-            guard let self, self.isConfigured else { return }
+            guard let self, self.isConfigured, self.session.isRunning else { return }
+
+            // Prevent capturing if a capture is already in progress
+            guard self.photoCaptureProcessor == nil else { return }
 
             let format: [String: Any]
             if self.photoOutput.availablePhotoCodecTypes.contains(.hevc) {
@@ -309,16 +310,18 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             }
 
             let photoSettings = AVCapturePhotoSettings(format: format)
-            if self.capabilities.hasFlash {
+            if self.capabilities.hasFlash, let device = self.currentVideoInput?.device, device.hasFlash {
                 photoSettings.flashMode = self.settings.flash.avFlashMode
             }
             photoSettings.photoQualityPrioritization = .speed
-            if self.photoOutput.maxPhotoDimensions.width > 0 {
-                photoSettings.maxPhotoDimensions = self.photoOutput.maxPhotoDimensions
+
+            let maxDimensions = self.photoOutput.maxPhotoDimensions
+            if maxDimensions.width > 0 && maxDimensions.height > 0 {
+                photoSettings.maxPhotoDimensions = maxDimensions
             }
 
             let livePhotoURL: URL?
-            if self.photoOutput.isLivePhotoCaptureSupported && self.settings.isLivePhotoEnabled {
+            if self.photoOutput.isLivePhotoCaptureSupported && self.photoOutput.isLivePhotoCaptureEnabled && self.settings.isLivePhotoEnabled {
                 livePhotoURL = Self.temporaryFileURL(pathExtension: "mov")
                 photoSettings.livePhotoMovieFileURL = livePhotoURL
             } else {
@@ -335,7 +338,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                     self?.showTransientError(message)
                 },
                 onFinish: { [weak self] in
-                    self?.photoCaptureProcessor = nil
+                    self?.publish {
+                        self?.photoCaptureProcessor = nil
+                    }
                 }
             )
 
@@ -575,6 +580,7 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
     private let onFinish: @Sendable () -> Void
 
     private var processedPhotoData: Data?
+    private var didFinish = false
 
     init(
         aspectRatio: AspectRatioOption,
@@ -591,8 +597,8 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
     }
 
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        guard error == nil else {
-            onError("Photo capture failed.")
+        if let error {
+            onError("Photo capture failed: \(error.localizedDescription)")
             return
         }
 
@@ -605,12 +611,22 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
     }
 
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
-        guard error == nil, let processedPhotoData else {
-            onFinish()
+        guard !didFinish else { return }
+        didFinish = true
+
+        if let error {
+            onError("Photo capture failed: \(error.localizedDescription)")
+            cleanup()
             return
         }
 
-        Task {
+        guard let processedPhotoData else {
+            onError("Photo processing failed.")
+            cleanup()
+            return
+        }
+
+        Task { @MainActor [processedPhotoData, livePhotoMovieURL] in
             let authorized = await CameraSessionController.requestPhotoLibraryAccess()
             guard authorized else {
                 self.onError("Photo Library access is required to save photos.")

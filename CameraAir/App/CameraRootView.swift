@@ -157,20 +157,28 @@ struct CameraRootView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Night Mode", systemImage: "moon.haze")
+                    Label("Low Light Boost", systemImage: "moon.haze")
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white.opacity(0.8))
 
-                    OptionStrip(
-                        title: "Night Mode",
-                        options: NightModePreference.allCases,
-                        selection: controller.settings.nightMode,
-                        label: \.title
-                    ) { option in
-                        controller.setNightMode(option)
+                    if controller.capabilities.supportsLowLightBoost {
+                        OptionStrip(
+                            title: "Low Light Boost",
+                            options: NightModePreference.allCases,
+                            selection: controller.settings.nightMode,
+                            label: \.title
+                        ) { option in
+                            controller.setNightMode(option)
+                        }
+                    } else {
+                        HStack(spacing: 8) {
+                            Image(systemName: "info.circle")
+                            Text("Not supported on this device. Night Mode is handled automatically by the camera system.")
+                        }
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .padding(.vertical, 4)
                     }
-                    .opacity(controller.capabilities.supportsLowLightBoost ? 1 : 0.45)
-                    .allowsHitTesting(controller.capabilities.supportsLowLightBoost)
                 }
             }
         }
@@ -233,7 +241,7 @@ struct CameraRootView: View {
                         .scaledToFill()
                 } else {
                     ZStack {
-                        Color.white.opacity(0.08)
+                        Color.clear
                         Image(systemName: "photo.on.rectangle.angled")
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.85))
@@ -246,6 +254,7 @@ struct CameraRootView: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .strokeBorder(.white.opacity(0.16), lineWidth: 1)
             }
+            .modifier(ThumbnailGlassModifier())
         }
         .buttonStyle(.plain)
         .scaleEffect(isThumbnailPressed ? 0.92 : 1)
@@ -263,7 +272,7 @@ struct CameraRootView: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(.white.opacity(0.16))
+                    .glassEffect(.regular.tint(Color.white.opacity(0.06)), in: .rect)
                     .frame(width: 92, height: 92)
 
                 Circle()
@@ -274,10 +283,12 @@ struct CameraRootView: View {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Color.red)
                         .frame(width: 34, height: 34)
+                        .glassEffectIfAvailable(prominence: .regular)
                 } else {
                     Circle()
                         .fill(controller.mode == .video ? Color.red : Color.white)
                         .frame(width: controller.mode == .video ? 62 : 68, height: controller.mode == .video ? 62 : 68)
+                        .glassEffectIfAvailable(prominence: controller.mode == .video ? .regular : .prominent)
                 }
             }
         }
@@ -336,31 +347,34 @@ private struct ModeStrip: View {
     let onSelect: (CaptureMode) -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(CaptureMode.allCases) { mode in
-                Button {
-                    onSelect(mode)
-                } label: {
-                    Text(mode.title.uppercased())
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .tracking(0.6)
-                        .foregroundStyle(selection == mode ? .black : .white.opacity(0.86))
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
-                        .frame(maxWidth: .infinity)
-                        .background {
-                            if selection == mode {
-                                Capsule()
-                                    .fill(Color.white.opacity(0.92))
-                                    .matchedGeometryEffect(id: "mode-selection", in: selectionNamespace)
+        GlassEffectContainer(spacing: 4) {
+            HStack(spacing: 4) {
+                ForEach(CaptureMode.allCases) { mode in
+                    Button {
+                        onSelect(mode)
+                    } label: {
+                        Text(mode.title.uppercased())
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .tracking(0.6)
+                            .foregroundStyle(selection == mode ? .black : .white.opacity(0.86))
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity)
+                            .background {
+                                if selection == mode {
+                                    Capsule()
+                                        .fill(Color.white.opacity(0.92))
+                                        .matchedGeometryEffect(id: "mode-selection", in: selectionNamespace)
+                                }
                             }
-                        }
+                            .glassEffect(.regular.tint(Color.white.opacity(0.04)).interactive(), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
+            .padding(5)
+            .glassEffect(.regular.tint(Color.white.opacity(0.06)), in: Capsule())
         }
-        .padding(5)
-        .glassCapsule(interactive: false)
     }
 }
 
@@ -493,13 +507,8 @@ private struct GlassPanel<Content: View>: View {
 
 private struct GlassPanelModifier: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
-            content
-                .glassEffect(.regular.tint(Color.white.opacity(0.08)), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        } else {
-            content
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        }
+        content
+            .glassEffect(.regular.tint(Color.white.opacity(0.08)), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 }
 
@@ -508,22 +517,12 @@ private struct GlassCapsuleModifier: ViewModifier {
     let isActive: Bool
 
     func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
-            if interactive {
-                content
-                    .glassEffect(.regular.tint(isActive ? Color.white.opacity(0.16) : Color.white.opacity(0.06)).interactive(), in: Capsule())
-            } else {
-                content
-                    .glassEffect(.regular.tint(isActive ? Color.white.opacity(0.16) : Color.white.opacity(0.06)), in: Capsule())
-            }
+        if interactive {
+            content
+                .glassEffect(.regular.tint(isActive ? Color.white.opacity(0.16) : Color.white.opacity(0.06)).interactive(), in: Capsule())
         } else {
-            if isActive {
-                content
-                    .background(Color.white.opacity(0.18), in: Capsule())
-            } else {
-                content
-                    .background(.ultraThinMaterial, in: Capsule())
-            }
+            content
+                .glassEffect(.regular.tint(isActive ? Color.white.opacity(0.16) : Color.white.opacity(0.06)), in: Capsule())
         }
     }
 }
@@ -531,6 +530,30 @@ private struct GlassCapsuleModifier: ViewModifier {
 private extension View {
     func glassCapsule(interactive: Bool, isActive: Bool = false) -> some View {
         modifier(GlassCapsuleModifier(interactive: interactive, isActive: isActive))
+    }
+}
+
+private enum GlassProminence {
+    case regular
+    case prominent
+}
+
+private struct ThumbnailGlassModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .glassEffect(.regular.tint(Color.white.opacity(0.04)).interactive(), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func glassEffectIfAvailable(prominence: GlassProminence = .regular) -> some View {
+        switch prominence {
+        case .regular:
+            self.glassEffect(.regular.tint(Color.white.opacity(0.12)).interactive(), in: Circle())
+        case .prominent:
+            self.glassEffect(.prominent.tint(Color.white.opacity(0.14)).interactive(), in: Circle())
+        }
     }
 }
 
@@ -593,32 +616,33 @@ private struct CaptureViewer: View {
         }
     }
 
+    @MainActor
     private func loadAsset() async {
         if asset.mediaType == .video {
             let options = PHVideoRequestOptions()
             options.isNetworkAccessAllowed = true
-            let url = await withCheckedContinuation { (continuation: CheckedContinuation<URL?, Never>) in
+            options.deliveryMode = .automatic
+
+            let avAsset = await withCheckedContinuation { (continuation: CheckedContinuation<AVAsset?, Never>) in
                 var didResume = false
                 PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
                     guard !didResume else { return }
                     didResume = true
-                    if let urlAsset = avAsset as? AVURLAsset {
-                        continuation.resume(returning: urlAsset.url)
-                    } else {
-                        continuation.resume(returning: nil)
-                    }
+                    continuation.resume(returning: avAsset)
                 }
             }
-            if let url {
-                await MainActor.run {
-                    player = AVPlayer(url: url)
-                }
+
+            if let avAsset {
+                let playerItem = AVPlayerItem(asset: avAsset)
+                self.player = AVPlayer(playerItem: playerItem)
             }
         } else {
             let options = PHImageRequestOptions()
             options.isSynchronous = false
             options.isNetworkAccessAllowed = true
             options.deliveryMode = .highQualityFormat
+            options.resizeMode = .none
+
             let result = await withCheckedContinuation { (continuation: CheckedContinuation<UIImage?, Never>) in
                 var didResume = false
                 PHImageManager.default().requestImage(
@@ -628,14 +652,14 @@ private struct CaptureViewer: View {
                     options: options
                 ) { image, info in
                     let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
-                    guard !isDegraded, !didResume else { return }
+                    let isCancelled = (info?[PHImageCancelledKey] as? Bool) ?? false
+                    guard !isDegraded, !isCancelled, !didResume else { return }
                     didResume = true
                     continuation.resume(returning: image)
                 }
             }
-            await MainActor.run {
-                self.image = result
-            }
+
+            self.image = result
         }
     }
 }
