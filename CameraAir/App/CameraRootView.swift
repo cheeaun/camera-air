@@ -623,13 +623,18 @@ private struct CaptureViewer: View {
             options.isNetworkAccessAllowed = true
             options.deliveryMode = .automatic
 
+            struct AssetWrapper: @unchecked Sendable {
+                let value: AVAsset?
+            }
+
             let avAsset = await withCheckedContinuation { (continuation: CheckedContinuation<AVAsset?, Never>) in
                 var didResume = false
                 PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
                     guard !didResume else { return }
                     didResume = true
+                    let wrapper = AssetWrapper(value: avAsset)
                     DispatchQueue.main.async {
-                        continuation.resume(returning: avAsset)
+                        continuation.resume(returning: wrapper.value)
                     }
                 }
             }
@@ -645,6 +650,10 @@ private struct CaptureViewer: View {
             options.deliveryMode = .highQualityFormat
             options.resizeMode = .none
 
+            struct ImageWrapper: @unchecked Sendable {
+                let value: UIImage?
+            }
+
             let result = await withCheckedContinuation { (continuation: CheckedContinuation<UIImage?, Never>) in
                 var didResume = false
                 PHImageManager.default().requestImage(
@@ -657,8 +666,9 @@ private struct CaptureViewer: View {
                     let isCancelled = (info?[PHImageCancelledKey] as? Bool) ?? false
                     guard !isDegraded, !isCancelled, !didResume else { return }
                     didResume = true
+                    let wrapper = ImageWrapper(value: image)
                     DispatchQueue.main.async {
-                        continuation.resume(returning: image)
+                        continuation.resume(returning: wrapper.value)
                     }
                 }
             }
