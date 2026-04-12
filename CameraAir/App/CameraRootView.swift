@@ -607,12 +607,30 @@ private struct CaptureViewer: View {
 
     @State private var image: UIImage?
     @State private var player: AVPlayer?
+    @State private var errorMessage: String?
+
+    private var preferredTargetSize: CGSize {
+        let screenSize = UIScreen.main.bounds.size
+        let scale = UIScreen.main.scale
+        return CGSize(width: screenSize.width * scale * 2, height: screenSize.height * scale * 2)
+    }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            if asset.mediaType == .video {
+            if let errorMessage {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.white.opacity(0.7))
+                    Text(errorMessage)
+                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+            } else if asset.mediaType == .video {
                 if let player {
                     VideoPlayer(player: player)
                         .ignoresSafeArea()
@@ -684,13 +702,15 @@ private struct CaptureViewer: View {
             if let avAsset {
                 let playerItem = AVPlayerItem(asset: avAsset)
                 self.player = AVPlayer(playerItem: playerItem)
+            } else {
+                self.errorMessage = "Unable to load video."
             }
         } else {
             let options = PHImageRequestOptions()
             options.isSynchronous = false
             options.isNetworkAccessAllowed = true
             options.deliveryMode = .highQualityFormat
-            options.resizeMode = .none
+            options.resizeMode = .fast
 
             struct ImageWrapper: @unchecked Sendable {
                 let value: UIImage?
@@ -700,8 +720,8 @@ private struct CaptureViewer: View {
                 var didResume = false
                 PHImageManager.default().requestImage(
                     for: asset,
-                    targetSize: PHImageManagerMaximumSize,
-                    contentMode: .default,
+                    targetSize: preferredTargetSize,
+                    contentMode: .aspectFit,
                     options: options
                 ) { image, info in
                     let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
@@ -716,6 +736,9 @@ private struct CaptureViewer: View {
             }
 
             self.image = result
+            if result == nil {
+                self.errorMessage = "Unable to load image."
+            }
         }
     }
 }
