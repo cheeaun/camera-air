@@ -280,26 +280,24 @@ struct CameraRootView: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.08))
+                    .fill(Color.white.opacity(0.1))
                     .frame(width: 84, height: 84)
-                    .glassEffect(.regular.tint(Color.white.opacity(0.04)), in: .rect)
 
                 Circle()
-                    .strokeBorder(.white.opacity(0.3), lineWidth: 2)
+                    .strokeBorder(.white.opacity(0.4), lineWidth: 2)
                     .frame(width: 84, height: 84)
 
                 if controller.mode == .video && controller.isRecording {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Color.red)
                         .frame(width: 32, height: 32)
-                        .glassEffect(.regular.tint(Color.white.opacity(0.1)), in: .rect)
                 } else {
                     Circle()
                         .fill(controller.mode == .video ? Color.red : Color.white)
                         .frame(width: controller.mode == .video ? 58 : 64, height: controller.mode == .video ? 58 : 64)
-                        .glassEffect(.regular.tint(controller.mode == .video ? Color.white.opacity(0.1) : Color.white.opacity(0.15)), in: .rect)
                 }
             }
+            .glassEffect(.regular.tint(Color.white.opacity(0.08)), in: .rect)
         }
         .buttonStyle(.plain)
         .scaleEffect(controller.isRecording ? 0.94 : 1)
