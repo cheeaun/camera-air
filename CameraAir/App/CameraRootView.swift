@@ -10,6 +10,7 @@ struct CameraRootView: View {
     @StateObject private var controller = CameraSessionController()
     @State private var isSettingsExpanded = false
     @State private var isThumbnailPressed = false
+    @State private var zoomSliderValue: CGFloat = 1.0
 
     var body: some View {
         ZStack {
@@ -41,6 +42,16 @@ struct CameraRootView: View {
                 controller.dismissLatestCapture()
             }
         }
+        .onAppear {
+            zoomSliderValue = controller.settings.customZoomFactor
+        }
+        .onChange(of: controller.settings.customZoomFactor) { _, newValue in
+            zoomSliderValue = newValue
+        }
+        .onChange(of: zoomSliderValue) { _, newValue in
+            guard abs(controller.settings.customZoomFactor - newValue) > 0.01 else { return }
+            controller.setCustomZoomFactor(newValue, animated: true)
+        }
     }
 
     private var previewLayer: some View {
@@ -71,13 +82,6 @@ struct CameraRootView: View {
                 endPoint: .bottom
             )
         }
-        .gesture(
-            MagnificationGesture()
-                .onChanged { scale in
-                    let newFactor = controller.settings.customZoomFactor * scale
-                    controller.setCustomZoomFactor(newFactor)
-                }
-        )
         .animation(.snappy(duration: 0.28), value: controller.settings.aspectRatio)
         .ignoresSafeArea()
     }
@@ -129,6 +133,17 @@ struct CameraRootView: View {
                 isEnabled: controller.capabilities.supportsExposureLock
             ) {
                 controller.toggleExposureLock()
+            }
+
+            if controller.mode == .photo {
+                ToggleChip(
+                    title: "Live",
+                    icon: controller.settings.isLivePhotoEnabled ? "livephoto" : "livephoto.slash",
+                    isOn: controller.settings.isLivePhotoEnabled,
+                    isEnabled: controller.capabilities.supportsLivePhoto
+                ) {
+                    controller.toggleLivePhoto()
+                }
             }
 
             Spacer(minLength: 0)
@@ -200,7 +215,6 @@ struct CameraRootView: View {
             HStack(alignment: .center, spacing: 16) {
                 thumbnailButton
                 captureButton
-                zoomControls
                 lensButton
             }
             .padding(.horizontal, 22)
@@ -216,20 +230,20 @@ struct CameraRootView: View {
             }
             .buttonStyle(.plain)
 
-            if controller.mode == .photo {
-                Button {
-                    controller.toggleLivePhoto()
-                } label: {
-                    StatusPill(
-                        text: "Live",
-                        systemImage: controller.settings.isLivePhotoEnabled ? "livephoto" : "livephoto.slash",
-                        isEnabled: controller.capabilities.supportsLivePhoto,
-                        isActive: controller.settings.isLivePhotoEnabled
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(!controller.capabilities.supportsLivePhoto)
+            if controller.capabilities.supportedZoomFactors.count > 1 {
+                ZoomFactorSlider(
+                    value: $zoomSliderValue,
+                    supportedFactors: controller.capabilities.supportedZoomFactors,
+                    onEditingChanged: { isEditing in
+                        if !isEditing {
+                            controller.commitZoomSelection()
+                        }
+                    }
+                )
+                .frame(maxWidth: .infinity)
             }
+
+            Spacer(minLength: 0)
 
             if controller.mode == .video {
                 StatusPill(text: controller.isRecording ? "Recording" : "Ready", systemImage: controller.isRecording ? "record.circle.fill" : "video.fill")
@@ -280,12 +294,12 @@ struct CameraRootView: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.1))
+                    .strokeBorder(.white.opacity(0.4), lineWidth: 2)
                     .frame(width: 84, height: 84)
 
                 Circle()
-                    .strokeBorder(.white.opacity(0.4), lineWidth: 2)
-                    .frame(width: 84, height: 84)
+                    .fill(Color.white.opacity(0.12))
+                    .frame(width: 78, height: 78)
 
                 if controller.mode == .video && controller.isRecording {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -297,7 +311,8 @@ struct CameraRootView: View {
                         .frame(width: controller.mode == .video ? 58 : 64, height: controller.mode == .video ? 58 : 64)
                 }
             }
-            .glassEffect(.regular.tint(Color.white.opacity(0.08)), in: .rect)
+            .frame(width: 84, height: 84)
+            .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .scaleEffect(controller.isRecording ? 0.94 : 1)
@@ -316,43 +331,14 @@ struct CameraRootView: View {
             }
             .foregroundStyle(.white)
             .frame(width: 58, height: 58)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+            }
+            .modifier(ThumbnailGlassModifier())
         }
         .buttonStyle(.plain)
-        .glassCapsule(interactive: true)
-    }
-
-    private var zoomControls: some View {
-        VStack(spacing: 8) {
-            ForEach(controller.capabilities.supportedZoomLevels) { level in
-                Button {
-                    controller.setZoomLevel(level)
-                } label: {
-                    VStack(spacing: 2) {
-                        Image(systemName: level.systemImage)
-                            .font(.system(size: 16, weight: .semibold))
-                        Text(level.title)
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    }
-                    .foregroundStyle(controller.settings.zoomLevel == level ? .white : .white.opacity(0.6))
-                    .frame(width: 44, height: 44)
-                    .background {
-                        if controller.settings.zoomLevel == level {
-                            Circle()
-                                .fill(Color.white.opacity(0.2))
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .glassCapsule(interactive: true)
-            }
-
-            if controller.capabilities.maxZoomFactor > 1.0 {
-                Text(String(format: "%.1fx", controller.settings.customZoomFactor))
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .padding(.vertical, 2)
-            }
-        }
     }
 
     private var permissionOverlay: some View {
@@ -417,6 +403,64 @@ private struct ModeStrip: View {
                 .fill(Color.white.opacity(0.1))
         }
         .glassEffect(.regular.tint(Color.white.opacity(0.05)), in: Capsule())
+    }
+}
+
+private struct ZoomFactorSlider: View {
+    @Binding var value: CGFloat
+
+    let supportedFactors: [CGFloat]
+    let onEditingChanged: (Bool) -> Void
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            HStack(spacing: 10) {
+                Text(value.cameraZoomLabel)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .frame(width: 38, alignment: .trailing)
+
+                Slider(
+                    value: Binding(
+                        get: { Double(value) },
+                        set: { value = CGFloat($0) }
+                    ),
+                    in: Double(range.lowerBound)...Double(range.upperBound),
+                    step: 0.1,
+                    onEditingChanged: onEditingChanged
+                )
+                .tint(.white)
+                .onChange(of: value) { _, newValue in
+                    let snappedValue = nearestFactor(to: newValue)
+                    if abs(snappedValue - newValue) > 0.01 {
+                        value = snappedValue
+                    }
+                }
+            }
+
+            HStack(spacing: 0) {
+                ForEach(supportedFactors, id: \.self) { factor in
+                    Text(factor.cameraZoomLabel)
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundStyle(abs(factor - value) < 0.05 ? .white : .white.opacity(0.55))
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .glassCapsule(interactive: true)
+    }
+
+    private var range: ClosedRange<CGFloat> {
+        let sorted = supportedFactors.sorted()
+        let lowerBound = sorted.first ?? 1.0
+        let upperBound = sorted.last ?? lowerBound
+        return lowerBound...max(upperBound, lowerBound)
+    }
+
+    private func nearestFactor(to value: CGFloat) -> CGFloat {
+        supportedFactors.min(by: { abs($0 - value) < abs($1 - value) }) ?? value
     }
 }
 

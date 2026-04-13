@@ -176,13 +176,14 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             }
             strongSelf.session.commitConfiguration()
 
-            strongSelf.applyCaptureSettings()
             strongSelf.refreshCapabilities()
             // Reset zoom to 1x when switching lenses
             strongSelf.publish {
                 strongSelf.settings.zoomLevel = .standard
-                strongSelf.settings.customZoomFactor = 1.0
+                strongSelf.settings.customZoomFactor = strongSelf.clampedDisplayZoomFactor(1.0)
             }
+            strongSelf.applyCaptureSettings()
+            strongSelf.saveSettings()
             strongSelf.startRecordingIfNeeded()
         }
     }
@@ -239,27 +240,25 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func setZoomLevel(_ zoomLevel: ZoomLevel) {
+        setCustomZoomFactor(zoomLevel.factor, persist: true, animated: true)
+    }
+
+    func setCustomZoomFactor(_ factor: CGFloat, persist: Bool = false, animated: Bool = false) {
+        let clampedFactor = clampedDisplayZoomFactor(factor)
         publish {
-            self.settings.zoomLevel = zoomLevel
-            self.settings.customZoomFactor = zoomLevel.factor
+            self.settings.customZoomFactor = clampedFactor
+            self.settings.zoomLevel = self.closestZoomLevel(for: clampedFactor)
         }
-        saveSettings()
+        if persist {
+            saveSettings()
+        }
         sessionQueue.async { [weak self] in
-            self?.applyZoomSettings()
+            self?.applyZoomSettings(animated: animated)
         }
     }
 
-    func setCustomZoomFactor(_ factor: CGFloat) {
-        let clampedFactor = min(max(factor, capabilities.minZoomFactor), capabilities.maxZoomFactor)
-        publish {
-            self.settings.customZoomFactor = clampedFactor
-            // Update zoom level based on closest preset
-            self.settings.zoomLevel = ZoomLevel.allCases.min(by: { abs($0.factor - clampedFactor) < abs($1.factor - clampedFactor) }) ?? .standard
-        }
+    func commitZoomSelection() {
         saveSettings()
-        sessionQueue.async { [weak self] in
-            self?.applyZoomSettings()
-        }
     }
 
     func performPrimaryAction() {
@@ -351,11 +350,10 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             strongSelf.session.commitConfiguration()
             strongSelf.isConfigured = true
             strongSelf.updatePhotoOutputDimensions()
-            strongSelf.applyCaptureSettings()
             strongSelf.session.startRunning()
-            // Refresh capabilities after session is running to ensure proper detection
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 strongSelf.refreshCapabilities()
+                strongSelf.applyCaptureSettings()
             }
             strongSelf.startRecordingIfNeeded()
         }
@@ -466,17 +464,24 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             showTransientError("Unable to update camera settings.")
         }
 
-        applyZoomSettings()
+        applyZoomSettings(animated: false)
     }
 
-    private func applyZoomSettings() {
+    private func applyZoomSettings(animated: Bool) {
         guard let device = currentVideoInput?.device else { return }
         do {
             try device.lockForConfiguration()
             defer { device.unlockForConfiguration() }
 
             if device.activeFormat.videoSupportedFrameRateRanges.isEmpty == false {
-                device.videoZoomFactor = min(max(settings.customZoomFactor, device.minAvailableVideoZoomFactor), device.maxAvailableVideoZoomFactor)
+                let targetZoomFactor = clampedDeviceZoomFactor(for: settings.customZoomFactor, device: device)
+                if animated {
+                    device.cancelVideoZoomRamp()
+                    device.ramp(toVideoZoomFactor: targetZoomFactor, withRate: 28)
+                } else {
+                    device.cancelVideoZoomRamp()
+                    device.videoZoomFactor = targetZoomFactor
+                }
             }
         } catch {
             showTransientError("Unable to update zoom settings.")
@@ -495,12 +500,10 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     private func refreshCapabilities() {
         let device = currentVideoInput?.device
-        let minZoom = device?.minAvailableVideoZoomFactor ?? 1.0
-        let maxZoom = device?.maxAvailableVideoZoomFactor ?? 1.0
-
-        var supportedZoomLevels: [ZoomLevel] = [.standard] // Always support 1x
-        if maxZoom >= 2.0 { supportedZoomLevels.append(.telephoto) }
-        if minZoom <= 0.5 { supportedZoomLevels.append(.wide) }
+        let minZoom = displayZoomFactor(for: device?.minAvailableVideoZoomFactor ?? 1.0, on: device)
+        let maxZoom = displayZoomFactor(for: device?.maxAvailableVideoZoomFactor ?? 1.0, on: device)
+        let supportedZoomFactors = supportedPhysicalZoomFactors(for: device)
+        let supportedZoomLevels = supportedZoomFactors.compactMap(Self.zoomLevel(for:))
 
         let newCapabilities = CameraCapabilities(
             hasFlash: device?.hasFlash ?? false,
@@ -508,25 +511,96 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             supportsLowLightBoost: device?.isLowLightBoostSupported ?? false,
             supportsExposureLock: device?.isExposureModeSupported(.locked) ?? false,
             supportedZoomLevels: supportedZoomLevels,
+            supportedZoomFactors: supportedZoomFactors,
             maxZoomFactor: maxZoom,
             minZoomFactor: minZoom
         )
 
+        let normalizedZoomFactor = clampedDisplayZoomFactor(settings.customZoomFactor, capabilities: newCapabilities)
         publish {
             self.capabilities = newCapabilities
+            self.settings.customZoomFactor = normalizedZoomFactor
+            self.settings.zoomLevel = self.closestZoomLevel(for: normalizedZoomFactor)
         }
     }
 
     private func discoverDevice(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
         let deviceTypes: [AVCaptureDevice.DeviceType] = position == .front
             ? [.builtInTrueDepthCamera, .builtInWideAngleCamera]
-            : [.builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera, .builtInWideAngleCamera]
+            : [.builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera, .builtInWideAngleCamera, .builtInUltraWideCamera, .builtInTelephotoCamera]
 
         return AVCaptureDevice.DiscoverySession(
             deviceTypes: deviceTypes,
             mediaType: .video,
             position: position
         ).devices.first
+    }
+
+    private func supportedPhysicalZoomFactors(for device: AVCaptureDevice?) -> [CGFloat] {
+        guard let device else { return [1.0] }
+
+        let multiplier = zoomDisplayMultiplier(for: device)
+        var factors = Set<CGFloat>([1.0])
+        let constituentTypes = Set(device.constituentDevices.map(\.deviceType))
+        let hasUltraWide = constituentTypes.contains(.builtInUltraWideCamera)
+        let hasTelephoto = constituentTypes.contains(.builtInTelephotoCamera)
+
+        if hasUltraWide {
+            factors.insert(roundedZoomFactor(1.0 * multiplier))
+        }
+
+        for switchOverFactor in device.virtualDeviceSwitchOverVideoZoomFactors where hasTelephoto {
+            let displayFactor = roundedZoomFactor(CGFloat(truncating: switchOverFactor) * multiplier)
+            if displayFactor > 1.0 {
+                factors.insert(displayFactor)
+            }
+        }
+
+        let sortedFactors = factors.sorted()
+        return sortedFactors.isEmpty ? [1.0] : sortedFactors
+    }
+
+    private func clampedDisplayZoomFactor(_ factor: CGFloat, capabilities: CameraCapabilities? = nil) -> CGFloat {
+        let range = (capabilities ?? self.capabilities).selectableZoomRange
+        return min(max(factor, range.lowerBound), range.upperBound)
+    }
+
+    private func clampedDeviceZoomFactor(for displayFactor: CGFloat, device: AVCaptureDevice) -> CGFloat {
+        let rawZoomFactor = displayFactor / zoomDisplayMultiplier(for: device)
+        return min(max(rawZoomFactor, device.minAvailableVideoZoomFactor), device.maxAvailableVideoZoomFactor)
+    }
+
+    private func displayZoomFactor(for deviceZoomFactor: CGFloat, on device: AVCaptureDevice?) -> CGFloat {
+        guard let device else { return roundedZoomFactor(deviceZoomFactor) }
+        return roundedZoomFactor(deviceZoomFactor * zoomDisplayMultiplier(for: device))
+    }
+
+    private func zoomDisplayMultiplier(for device: AVCaptureDevice) -> CGFloat {
+        if #available(iOS 18.0, *) {
+            return max(device.displayVideoZoomFactorMultiplier, 0.01)
+        }
+
+        return 1.0
+    }
+
+    private func closestZoomLevel(for factor: CGFloat) -> ZoomLevel {
+        ZoomLevel.allCases.min(by: { abs($0.factor - factor) < abs($1.factor - factor) }) ?? .standard
+    }
+
+    private static func zoomLevel(for factor: CGFloat) -> ZoomLevel? {
+        if factor <= 0.75 {
+            return .wide
+        }
+
+        if factor >= 1.5 {
+            return .telephoto
+        }
+
+        return .standard
+    }
+
+    private func roundedZoomFactor(_ factor: CGFloat) -> CGFloat {
+        CGFloat((Double(factor) * 10).rounded() / 10)
     }
 
     private func applyTorchState(isEnabled: Bool) {

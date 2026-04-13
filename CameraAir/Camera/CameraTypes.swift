@@ -235,8 +235,26 @@ struct CameraCapabilities: Equatable {
     var supportsLowLightBoost = false
     var supportsExposureLock = false
     var supportedZoomLevels: [ZoomLevel] = [.standard]
+    var supportedZoomFactors: [CGFloat] = [1.0]
     var maxZoomFactor: CGFloat = 1.0
     var minZoomFactor: CGFloat = 1.0
+
+    var selectableZoomRange: ClosedRange<CGFloat> {
+        let lowerBound = supportedZoomFactors.first ?? 1.0
+        let upperBound = supportedZoomFactors.last ?? lowerBound
+        return lowerBound...max(upperBound, lowerBound)
+    }
+}
+
+extension CGFloat {
+    var cameraZoomLabel: String {
+        let roundedValue = (Double(self) * 10).rounded() / 10
+        if abs(roundedValue.rounded() - roundedValue) < 0.05 {
+            return String(format: "%.0fx", roundedValue)
+        }
+
+        return String(format: "%.1fx", roundedValue)
+    }
 }
 
 struct CameraRoute: Equatable {
