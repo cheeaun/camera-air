@@ -610,9 +610,7 @@ private struct CaptureViewer: View {
     @State private var errorMessage: String?
 
     private var preferredTargetSize: CGSize {
-        let screenSize = UIScreen.main.bounds.size
-        let scale = UIScreen.main.scale
-        return CGSize(width: screenSize.width * scale * 2, height: screenSize.height * scale * 2)
+        CGSize(width: 2048, height: 2048) // Limit to 2048x2048 to prevent memory issues
     }
 
     var body: some View {
@@ -678,6 +676,11 @@ private struct CaptureViewer: View {
 
     @MainActor
     private func loadAsset() async {
+        guard asset.localIdentifier.count > 0 else {
+            self.errorMessage = "Invalid asset."
+            return
+        }
+
         if asset.mediaType == .video {
             let options = PHVideoRequestOptions()
             options.isNetworkAccessAllowed = true
@@ -697,9 +700,15 @@ private struct CaptureViewer: View {
                         continuation.resume(returning: wrapper.value)
                     }
                 }
+                // Timeout after 10 seconds to prevent hanging
+                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                    guard !didResume else { return }
+                    didResume = true
+                    continuation.resume(returning: nil)
+                }
             }
 
-            if let avAsset {
+            if let avAsset, avAsset.tracks.count > 0 {
                 let playerItem = AVPlayerItem(asset: avAsset)
                 self.player = AVPlayer(playerItem: playerItem)
             } else {
@@ -732,6 +741,12 @@ private struct CaptureViewer: View {
                     DispatchQueue.main.async {
                         continuation.resume(returning: wrapper.value)
                     }
+                }
+                // Timeout after 10 seconds to prevent hanging
+                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                    guard !didResume else { return }
+                    didResume = true
+                    continuation.resume(returning: nil)
                 }
             }
 
