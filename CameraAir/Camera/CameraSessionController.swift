@@ -658,14 +658,14 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
 
     private static func saveVideoToLibrary(from url: URL) async throws -> PHAsset {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PHAsset, Error>) in
-            var placeholder: PHObjectPlaceholder?
+            var capturedPlaceholder: PHObjectPlaceholder?
             PHPhotoLibrary.shared().performChanges({
                 let creationRequest = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
-                placeholder = creationRequest?.placeholderForCreatedAsset
+                capturedPlaceholder = creationRequest?.placeholderForCreatedAsset
             }) { success, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else if success, let placeholder {
+                } else if success, let placeholder = capturedPlaceholder {
                     let assets = PHAsset.fetchAssets(withLocalIdentifiers: [placeholder.localIdentifier], options: nil)
                     if let asset = assets.firstObject {
                         continuation.resume(returning: asset)
@@ -767,23 +767,23 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
         if let livePhotoMovieURL {
             try? FileManager.default.removeItem(at: livePhotoMovieURL)
         }
-        onFinish()
+        onFinish(nil)
     }
 
     private static func savePhotoToLibrary(photoData: Data, livePhotoMovieURL: URL?) async throws -> PHAsset {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PHAsset, Error>) in
-            var placeholder: PHObjectPlaceholder?
+            var capturedPlaceholder: PHObjectPlaceholder?
             PHPhotoLibrary.shared().performChanges({
                 let creationRequest = PHAssetCreationRequest.forAsset()
                 creationRequest.addResource(with: .photo, data: photoData, options: nil)
                 if let livePhotoMovieURL {
                     creationRequest.addResource(with: .pairedVideo, fileURL: livePhotoMovieURL, options: nil)
                 }
-                placeholder = creationRequest.placeholderForCreatedAsset
+                capturedPlaceholder = creationRequest.placeholderForCreatedAsset
             }) { success, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else if success, let placeholder {
+                } else if success, let placeholder = capturedPlaceholder {
                     let assets = PHAsset.fetchAssets(withLocalIdentifiers: [placeholder.localIdentifier], options: nil)
                     if let asset = assets.firstObject {
                         continuation.resume(returning: asset)

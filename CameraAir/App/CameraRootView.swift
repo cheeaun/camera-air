@@ -708,9 +708,18 @@ private struct CaptureViewer: View {
                 }
             }
 
-            if let avAsset, avAsset.tracks.count > 0 {
-                let playerItem = AVPlayerItem(asset: avAsset)
-                self.player = AVPlayer(playerItem: playerItem)
+            if let avAsset {
+                do {
+                    let tracks = try await avAsset.load(.tracks)
+                    if !tracks.isEmpty {
+                        let playerItem = AVPlayerItem(asset: avAsset)
+                        self.player = AVPlayer(playerItem: playerItem)
+                    } else {
+                        self.errorMessage = "Unable to load video."
+                    }
+                } catch {
+                    self.errorMessage = "Unable to load video."
+                }
             } else {
                 self.errorMessage = "Unable to load video."
             }
