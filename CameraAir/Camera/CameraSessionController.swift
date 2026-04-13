@@ -11,11 +11,18 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     @Published private(set) var isCameraAccessDenied = false
     @Published private(set) var latestThumbnail: UIImage?
     @Published var latestCaptureAsset: PHAsset?
+    @Published private(set) var lastCapturedAsset: PHAsset?
     @Published var errorMessage: String?
 
     let session = AVCaptureSession()
 
     private static let settingsKey = "CameraAir.Settings"
+    private static let lastCapturedKey = "CameraAir.LastCaptured"
+
+    private var lastCapturedLocalIdentifier: String? {
+        get { UserDefaults.standard.string(forKey: Self.lastCapturedKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.lastCapturedKey) }
+    }
 
     private let sessionQueue = DispatchQueue(label: "CameraAir.SessionQueue")
     private let photoOutput = AVCapturePhotoOutput()
@@ -32,12 +39,42 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     override init() {
         super.init()
         loadSettings()
+        loadLastCapturedAsset()
     }
 
     private func loadSettings() {
         guard let data = UserDefaults.standard.data(forKey: Self.settingsKey),
               let decoded = try? JSONDecoder().decode(CameraSettings.self, from: data) else { return }
         settings = decoded
+    }
+
+    private func loadLastCapturedAsset() {
+        guard let id = lastCapturedLocalIdentifier else { return }
+        let assets = PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil)
+        guard let asset = assets.firstObject else {
+            lastCapturedLocalIdentifier = nil
+            return
+        }
+        lastCapturedAsset = asset
+        loadThumbnailForAsset(asset)
+    }
+
+    private func loadThumbnailForAsset(_ asset: PHAsset) {
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .opportunistic
+        options.isNetworkAccessAllowed = true
+
+        let targetSize = CGSize(width: 116, height: 116)
+        PHImageManager.default().requestImage(
+            for: asset,
+            targetSize: targetSize,
+            contentMode: .aspectFill,
+            options: options
+        ) { [weak self] image, _ in
+            if let image {
+                self?.updateThumbnail(image)
+            }
+        }
     }
 
     private func saveSettings() {
@@ -252,39 +289,23 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         isOpeningCapture = true
 
         Task { @MainActor [weak self] in
-            guard let strongSelf = self else {
-                return
-            }
+            guard let strongSelf = self else { return }
 
-            let authorized = await Self.requestPhotoLibraryAccess(accessLevel: .readWrite)
-            guard authorized else {
-                strongSelf.showTransientError("Photo Library access is required to view captures.")
+            guard let asset = strongSelf.lastCapturedAsset else {
+                strongSelf.showTransientError("No recent captures from this app.")
                 strongSelf.isOpeningCapture = false
                 return
             }
 
-            let options = PHFetchOptions()
-            options.predicate = NSPredicate(format: "mediaType IN %@", [PHAssetMediaType.image.rawValue, PHAssetMediaType.video.rawValue])
-            options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-            options.fetchLimit = 1
-
-            let result = PHAsset.fetchAssets(with: options)
-
-            guard let latestAsset = result.firstObject else {
-                strongSelf.showTransientError("No captures found.")
-                strongSelf.isOpeningCapture = false
-                return
-            }
-
-            // Verify the asset is valid before setting it
-            guard latestAsset.localIdentifier.count > 0 else {
-                strongSelf.showTransientError("Unable to access the latest capture.")
+            // Verify the asset is still valid
+            guard asset.localIdentifier.count > 0 else {
+                strongSelf.showTransientError("Capture is no longer available.")
                 strongSelf.isOpeningCapture = false
                 return
             }
 
             strongSelf.publish {
-                strongSelf.latestCaptureAsset = latestAsset
+                strongSelf.latestCaptureAsset = asset
             }
             strongSelf.isOpeningCapture = false
         }
@@ -382,8 +403,11 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 onError: { [weak self] message in
                     self?.showTransientError(message)
                 },
-                onFinish: { [weak self] in
+                onFinish: { [weak self] asset in
                     guard let owner = self else { return }
+                    if let asset {
+                        owner.updateLastCapturedAsset(asset)
+                    }
                     owner.publish {
                         owner.photoCaptureProcessor = nil
                     }
@@ -537,6 +561,13 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
     }
 
+    private func updateLastCapturedAsset(_ asset: PHAsset) {
+        lastCapturedLocalIdentifier = asset.localIdentifier
+        publish {
+            self.lastCapturedAsset = asset
+        }
+    }
+
     private func publish(_ updates: @Sendable @escaping () -> Void) {
         if Thread.isMainThread {
             updates()
@@ -598,9 +629,10 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
             }
 
             do {
-                try await Self.saveVideoToLibrary(from: outputFileURL)
+                let asset = try await Self.saveVideoToLibrary(from: outputFileURL)
                 let thumbnail = try? await Self.makeVideoThumbnail(from: outputFileURL)
                 strongSelf.updateThumbnail(thumbnail)
+                strongSelf.updateLastCapturedAsset(asset)
             } catch {
                 strongSelf.showTransientError("Unable to save the video.")
             }
@@ -624,15 +656,22 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
         }
     }
 
-    private static func saveVideoToLibrary(from url: URL) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+    private static func saveVideoToLibrary(from url: URL) async throws -> PHAsset {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PHAsset, Error>) in
+            var placeholder: PHObjectPlaceholder?
             PHPhotoLibrary.shared().performChanges({
-                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+                let creationRequest = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+                placeholder = creationRequest?.placeholderForCreatedAsset
             }) { success, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else if success {
-                    continuation.resume(returning: ())
+                } else if success, let placeholder {
+                    let assets = PHAsset.fetchAssets(withLocalIdentifiers: [placeholder.localIdentifier], options: nil)
+                    if let asset = assets.firstObject {
+                        continuation.resume(returning: asset)
+                    } else {
+                        continuation.resume(throwing: NSError(domain: "CameraAir.VideoSave", code: 2))
+                    }
                 } else {
                     continuation.resume(throwing: NSError(domain: "CameraAir.VideoSave", code: 1))
                 }
@@ -654,7 +693,7 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
     private let livePhotoMovieURL: URL?
     private let onThumbnailReady: @Sendable (UIImage?) -> Void
     private let onError: @Sendable (String) -> Void
-    private let onFinish: @Sendable () -> Void
+    private let onFinish: @Sendable (PHAsset?) -> Void
 
     private var processedPhotoData: Data?
     private var didFinish = false
@@ -664,7 +703,7 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
         livePhotoMovieURL: URL?,
         onThumbnailReady: @Sendable @escaping (UIImage?) -> Void,
         onError: @Sendable @escaping (String) -> Void,
-        onFinish: @Sendable @escaping () -> Void
+        onFinish: @Sendable @escaping (PHAsset?) -> Void
     ) {
         self.aspectRatio = aspectRatio
         self.livePhotoMovieURL = livePhotoMovieURL
@@ -714,13 +753,13 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
             }
 
             do {
-                try await Self.savePhotoToLibrary(photoData: processedPhotoData, livePhotoMovieURL: livePhotoMovieURL)
+                let asset = try await Self.savePhotoToLibrary(photoData: processedPhotoData, livePhotoMovieURL: livePhotoMovieURL)
                 strongSelf.onThumbnailReady(UIImage(data: processedPhotoData))
+                strongSelf.onFinish(asset)
             } catch {
                 strongSelf.onError("Unable to save the photo.")
+                strongSelf.onFinish(nil)
             }
-
-            strongSelf.cleanup()
         }
     }
 
@@ -731,19 +770,26 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
         onFinish()
     }
 
-    private static func savePhotoToLibrary(photoData: Data, livePhotoMovieURL: URL?) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+    private static func savePhotoToLibrary(photoData: Data, livePhotoMovieURL: URL?) async throws -> PHAsset {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PHAsset, Error>) in
+            var placeholder: PHObjectPlaceholder?
             PHPhotoLibrary.shared().performChanges({
                 let creationRequest = PHAssetCreationRequest.forAsset()
                 creationRequest.addResource(with: .photo, data: photoData, options: nil)
                 if let livePhotoMovieURL {
                     creationRequest.addResource(with: .pairedVideo, fileURL: livePhotoMovieURL, options: nil)
                 }
+                placeholder = creationRequest.placeholderForCreatedAsset
             }) { success, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else if success {
-                    continuation.resume(returning: ())
+                } else if success, let placeholder {
+                    let assets = PHAsset.fetchAssets(withLocalIdentifiers: [placeholder.localIdentifier], options: nil)
+                    if let asset = assets.firstObject {
+                        continuation.resume(returning: asset)
+                    } else {
+                        continuation.resume(throwing: NSError(domain: "CameraAir.PhotoSave", code: 2))
+                    }
                 } else {
                     continuation.resume(throwing: NSError(domain: "CameraAir.PhotoSave", code: 1))
                 }
