@@ -8,6 +8,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     @Published private(set) var settings = CameraSettings()
     @Published private(set) var capabilities = CameraCapabilities()
     @Published private(set) var isRecording = false
+    @Published private(set) var recordingDuration: TimeInterval = 0
     @Published private(set) var isCameraAccessDenied = false
     @Published private(set) var latestThumbnail: UIImage?
     @Published var latestCaptureAsset: PHAsset?
@@ -27,6 +28,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private let sessionQueue = DispatchQueue(label: "CameraAir.SessionQueue")
     private let photoOutput = AVCapturePhotoOutput()
     private let movieOutput = AVCaptureMovieFileOutput()
+
+    private var recordingStartTime: Date?
+    private var recordingTimer: Timer?
 
     private var currentVideoInput: AVCaptureDeviceInput?
     private var currentAudioInput: AVCaptureDeviceInput?
@@ -123,6 +127,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             }
             strongSelf.session.stopRunning()
         }
+        stopRecordingTimer()
     }
 
     func setMode(_ mode: CaptureMode) {
@@ -425,6 +430,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             strongSelf.movieOutput.startRecording(to: outputURL, recordingDelegate: strongSelf)
             strongSelf.publish {
                 strongSelf.isRecording = true
+                strongSelf.recordingStartTime = Date()
+                strongSelf.startRecordingTimer()
             }
         }
     }
@@ -440,6 +447,25 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         guard pendingRoute?.shouldStartRecording == true, mode == .video, !movieOutput.isRecording else { return }
         pendingRoute = nil
         startRecording()
+    }
+
+    private func startRecordingTimer() {
+        recordingTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let strongSelf = self, let startTime = strongSelf.recordingStartTime else { return }
+            let duration = Date().timeIntervalSince(startTime)
+            strongSelf.publish {
+                strongSelf.recordingDuration = duration
+            }
+        }
+    }
+
+    private func stopRecordingTimer() {
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        recordingStartTime = nil
+        publish {
+            self.recordingDuration = 0
+        }
     }
 
     private func applyCaptureSettings() {
@@ -682,6 +708,7 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
         publish {
             self.isRecording = false
         }
+        stopRecordingTimer()
 
         guard error == nil else {
             showTransientError("Video capture failed.")

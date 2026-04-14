@@ -245,9 +245,7 @@ struct CameraRootView: View {
 
             Spacer(minLength: 0)
 
-            if controller.mode == .video {
-                StatusPill(text: controller.isRecording ? "Recording" : "Ready", systemImage: controller.isRecording ? "record.circle.fill" : "video.fill")
-            }
+
         }
         .padding(.horizontal, 20)
     }
@@ -305,6 +303,10 @@ struct CameraRootView: View {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Color.red)
                         .frame(width: 32, height: 32)
+
+                    Text(formatDuration(controller.recordingDuration))
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white)
                 } else {
                     Circle()
                         .fill(controller.mode == .video ? Color.red : Color.white)
@@ -339,6 +341,12 @@ struct CameraRootView: View {
             .modifier(ThumbnailGlassModifier())
         }
         .buttonStyle(.plain)
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 
     private var permissionOverlay: some View {
