@@ -877,7 +877,7 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
             PHPhotoLibrary.shared().performChanges({
                 let creationRequest = PHAssetCreationRequest.forAsset()
                 creationRequest.addResource(with: .photo, data: photoData, options: nil)
-                if let livePhotoMovieURL {
+                if let livePhotoMovieURL, FileManager.default.fileExists(atPath: livePhotoMovieURL.path) {
                     creationRequest.addResource(with: .pairedVideo, fileURL: livePhotoMovieURL, options: nil)
                 }
                 capturedPlaceholder = creationRequest.placeholderForCreatedAsset
