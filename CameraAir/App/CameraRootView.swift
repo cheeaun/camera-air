@@ -427,15 +427,15 @@ private struct ZoomFactorSlider: View {
                     ),
                     in: Double(range.lowerBound)...Double(range.upperBound),
                     step: 0.1,
-                    onEditingChanged: onEditingChanged
+                    onEditingChanged: { editing in
+                        if !editing {
+                            // Snap to nearest factor when editing ends
+                            value = nearestFactor(to: value)
+                        }
+                        onEditingChanged(editing)
+                    }
                 )
                 .tint(.white)
-                .onChange(of: value) { _, newValue in
-                    let snappedValue = nearestFactor(to: newValue)
-                    if abs(snappedValue - newValue) > 0.01 {
-                        value = snappedValue
-                    }
-                }
             }
 
             HStack(spacing: 0) {
