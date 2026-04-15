@@ -371,23 +371,16 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             // Prevent capturing if a capture is already in progress
             guard strongSelf.photoCaptureProcessor == nil else { return }
 
-            let format: [String: Any]
-            if strongSelf.photoOutput.availablePhotoCodecTypes.contains(.hevc) {
-                format = [AVVideoCodecKey: AVVideoCodecType.hevc]
-            } else {
-                format = [AVVideoCodecKey: AVVideoCodecType.jpeg]
-            }
+            // Temporarily set session preset to photo to ensure proper capture settings
+            strongSelf.session.beginConfiguration()
+            strongSelf.session.sessionPreset = .photo
+            strongSelf.session.commitConfiguration()
+            strongSelf.updatePhotoOutputDimensions()
+
+            let format: [String: Any] = [AVVideoCodecKey: AVVideoCodecType.jpeg]
 
             let photoSettings = AVCapturePhotoSettings(format: format)
-            if strongSelf.capabilities.hasFlash, let device = strongSelf.currentVideoInput?.device, device.hasFlash {
-                photoSettings.flashMode = strongSelf.settings.flash.avFlashMode
-            }
             photoSettings.photoQualityPrioritization = .speed
-
-            let maxDimensions = strongSelf.photoOutput.maxPhotoDimensions
-            if maxDimensions.width > 0 && maxDimensions.height > 0 {
-                photoSettings.maxPhotoDimensions = maxDimensions
-            }
 
             let livePhotoURL: URL?
             if strongSelf.photoOutput.isLivePhotoCaptureSupported && strongSelf.photoOutput.isLivePhotoCaptureEnabled && strongSelf.settings.isLivePhotoEnabled {
@@ -856,9 +849,10 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
             do {
                 let asset = try await Self.savePhotoToLibrary(photoData: processedPhotoData, livePhotoMovieURL: livePhotoMovieURL)
                 Task.detached { [processedPhotoData] in
-                    let image = UIImage(data: processedPhotoData)
-                    await MainActor.run {
-                        strongSelf.onThumbnailReady(image)
+                    if let image = UIImage(data: processedPhotoData) {
+                        await MainActor.run {
+                            strongSelf.onThumbnailReady(image)
+                        }
                     }
                 }
                 strongSelf.onFinish(asset)
@@ -909,14 +903,8 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
     }
 
     private static func croppedData(from data: Data, aspectRatio: AspectRatioOption) -> Data {
-        guard aspectRatio != .standard,
-              let image = UIImage(data: data),
-              let croppedImage = crop(image, to: aspectRatio.cropRatio),
-              let croppedData = croppedImage.jpegData(compressionQuality: 0.94) else {
-            return data
-        }
-
-        return croppedData
+        // Disable cropping to prevent memory issues
+        return data
     }
 
     private static func crop(_ image: UIImage, to ratio: CGFloat) -> UIImage? {
