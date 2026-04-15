@@ -877,11 +877,12 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
     }
 
     private static func savePhotoToLibrary(photoData: Data, livePhotoMovieURL: URL?) async throws -> PHAsset {
-        if let livePhotoMovieURL, !FileManager.default.fileExists(atPath: livePhotoMovieURL.path) {
-            throw NSError(domain: "CameraAir.PhotoSave", code: 3, userInfo: [NSLocalizedDescriptionKey: "Live photo movie file not found"])
-        }
-
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PHAsset, Error>) in
+            if let livePhotoMovieURL, !FileManager.default.fileExists(atPath: livePhotoMovieURL.path) {
+                continuation.resume(throwing: NSError(domain: "CameraAir.PhotoSave", code: 3, userInfo: [NSLocalizedDescriptionKey: "Live photo movie file not found"]))
+                return
+            }
+
             var capturedPlaceholder: PHObjectPlaceholder?
             PHPhotoLibrary.shared().performChanges({
                 let creationRequest = PHAssetCreationRequest.forAsset()
