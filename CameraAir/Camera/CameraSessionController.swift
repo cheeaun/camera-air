@@ -855,7 +855,12 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
 
             do {
                 let asset = try await Self.savePhotoToLibrary(photoData: processedPhotoData, livePhotoMovieURL: livePhotoMovieURL)
-                strongSelf.onThumbnailReady(UIImage(data: processedPhotoData))
+                Task.detached { [processedPhotoData] in
+                    let image = UIImage(data: processedPhotoData)
+                    await MainActor.run {
+                        strongSelf.onThumbnailReady(image)
+                    }
+                }
                 strongSelf.onFinish(asset)
             } catch {
                 strongSelf.onError("Unable to save the photo.")
@@ -872,12 +877,16 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
     }
 
     private static func savePhotoToLibrary(photoData: Data, livePhotoMovieURL: URL?) async throws -> PHAsset {
+        if let livePhotoMovieURL, !FileManager.default.fileExists(atPath: livePhotoMovieURL.path) {
+            throw NSError(domain: "CameraAir.PhotoSave", code: 3, userInfo: [NSLocalizedDescriptionKey: "Live photo movie file not found"])
+        }
+
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PHAsset, Error>) in
             var capturedPlaceholder: PHObjectPlaceholder?
             PHPhotoLibrary.shared().performChanges({
                 let creationRequest = PHAssetCreationRequest.forAsset()
                 creationRequest.addResource(with: .photo, data: photoData, options: nil)
-                if let livePhotoMovieURL, FileManager.default.fileExists(atPath: livePhotoMovieURL.path) {
+                if let livePhotoMovieURL {
                     creationRequest.addResource(with: .pairedVideo, fileURL: livePhotoMovieURL, options: nil)
                 }
                 capturedPlaceholder = creationRequest.placeholderForCreatedAsset
