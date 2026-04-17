@@ -90,12 +90,6 @@ struct CameraRootView: View {
         VStack(spacing: 0) {
             topBar
             Spacer(minLength: 24)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if isSettingsExpanded {
-                        isSettingsExpanded = false
-                    }
-                }
             if isSettingsExpanded {
                 settingsPanel
                     .padding(.horizontal, 18)
@@ -109,6 +103,17 @@ struct CameraRootView: View {
         .animation(.snappy(duration: 0.28), value: isSettingsExpanded)
         .animation(.snappy(duration: 0.22), value: controller.mode)
         .animation(.snappy(duration: 0.22), value: controller.isRecording)
+        .overlay {
+            if isSettingsExpanded {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        isSettingsExpanded = false
+                    }
+                    .transition(.opacity)
+            }
+        }
         .overlay(alignment: .top) {
             if let message = controller.errorMessage {
                 ToastLabel(message: message)
@@ -127,7 +132,7 @@ struct CameraRootView: View {
             )
 
             ToggleChip(
-                title: controller.settings.isExposureLocked ? "Locked" : "Exposure",
+                accessibilityLabel: controller.settings.isExposureLocked ? "Exposure locked" : "Exposure",
                 icon: controller.settings.isExposureLocked ? "camera.metering.center.weighted.average" : "camera.aperture",
                 isOn: controller.settings.isExposureLocked,
                 isEnabled: controller.capabilities.supportsExposureLock
@@ -137,7 +142,7 @@ struct CameraRootView: View {
 
             if controller.mode == .photo {
                 ToggleChip(
-                    title: "Live",
+                    accessibilityLabel: "Live photo",
                     icon: controller.settings.isLivePhotoEnabled ? "livephoto" : "livephoto.slash",
                     isOn: controller.settings.isLivePhotoEnabled,
                     isEnabled: controller.capabilities.supportsLivePhoto
@@ -149,8 +154,8 @@ struct CameraRootView: View {
             Spacer(minLength: 0)
 
             ToggleChip(
-                title: "Settings",
-                icon: isSettingsExpanded ? "slider.horizontal.3" : "line.3.horizontal.decrease.circle",
+                accessibilityLabel: isSettingsExpanded ? "Close settings" : "Open settings",
+                icon: "gearshape",
                 isOn: isSettingsExpanded,
                 isEnabled: true
             ) {
@@ -491,22 +496,19 @@ private struct FlashMenu: View {
                 }
             }
         } label: {
-            HStack(spacing: 8) {
-                Image(systemName: selection.systemImage)
-                Text(selection.title)
-            }
+            Image(systemName: selection.systemImage)
             .font(.system(size: 13, weight: .semibold, design: .rounded))
             .foregroundStyle(isEnabled ? .white : .white.opacity(0.44))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .frame(width: 44, height: 38)
         }
         .disabled(!isEnabled)
         .glassCapsule(interactive: true)
+        .accessibilityLabel(Text("Flash \(selection.title)"))
     }
 }
 
 private struct ToggleChip: View {
-    let title: String
+    let accessibilityLabel: String
     let icon: String
     let isOn: Bool
     let isEnabled: Bool
@@ -514,18 +516,15 @@ private struct ToggleChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                Text(title)
-            }
+            Image(systemName: icon)
             .font(.system(size: 13, weight: .semibold, design: .rounded))
             .foregroundStyle(isEnabled ? .white : .white.opacity(0.46))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .frame(width: 44, height: 38)
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .glassCapsule(interactive: true, isActive: isOn)
+        .accessibilityLabel(Text(accessibilityLabel))
     }
 }
 
@@ -544,6 +543,8 @@ private struct OptionStrip<Option: Hashable & Identifiable>: View {
                 } label: {
                     Text(option[keyPath: label])
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                         .foregroundStyle(selection == option ? .black : .white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
