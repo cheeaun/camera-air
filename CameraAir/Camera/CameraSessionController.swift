@@ -559,10 +559,16 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         guard let device else { return [1.0] }
 
         let multiplier = zoomDisplayMultiplier(for: device)
-        var factors = Set<CGFloat>([1.0])
+        var factors = Set<CGFloat>()
         let constituentTypes = Set(device.constituentDevices.map(\.deviceType))
         let hasUltraWide = constituentTypes.contains(.builtInUltraWideCamera)
         let hasTelephoto = constituentTypes.contains(.builtInTelephotoCamera)
+        let minZoom = displayZoomFactor(for: device.minAvailableVideoZoomFactor, on: device)
+        let maxZoom = displayZoomFactor(for: device.maxAvailableVideoZoomFactor, on: device)
+
+        factors.insert(roundedZoomFactor(minZoom))
+        factors.insert(roundedZoomFactor(maxZoom))
+        factors.insert(1.0)
 
         if hasUltraWide {
             factors.insert(roundedZoomFactor(1.0 * multiplier))
@@ -570,9 +576,13 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
         for switchOverFactor in device.virtualDeviceSwitchOverVideoZoomFactors where hasTelephoto {
             let displayFactor = roundedZoomFactor(CGFloat(truncating: switchOverFactor) * multiplier)
-            if displayFactor > 1.0 {
+            if displayFactor > minZoom && displayFactor < maxZoom {
                 factors.insert(displayFactor)
             }
+        }
+
+        if maxZoom > 1.0 {
+            factors.insert(roundedZoomFactor(min(maxZoom, 2.0)))
         }
 
         let sortedFactors = factors.sorted()

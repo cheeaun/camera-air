@@ -439,7 +439,7 @@ private struct ZoomFactorSlider: View {
                         set: { value = CGFloat($0) }
                     ),
                     in: Double(range.lowerBound)...Double(range.upperBound),
-                    step: 0.1,
+                    step: 0.05,
                     onEditingChanged: { editing in
                         if !editing {
                             // Snap to nearest factor when editing ends
