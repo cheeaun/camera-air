@@ -734,21 +734,7 @@ private struct CaptureViewer: View {
         }
 
         if asset.mediaType == .video {
-            let options = PHVideoRequestOptions()
-            options.isNetworkAccessAllowed = true
-            options.deliveryMode = .automatic
-
-            let avAssetWrapper = await withCheckedContinuation { (continuation: CheckedContinuation<VideoAssetRequestResult, Never>) in
-                let gate = PhotoRequestContinuationGate(continuation: continuation)
-                PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
-                    gate.resume(returning: VideoAssetRequestResult(asset: avAsset))
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-                    gate.resume(returning: VideoAssetRequestResult(asset: nil))
-                }
-            }
-            let avAsset = avAssetWrapper.asset
-
+            let avAsset = await PhotoAssetLoader.videoAsset(for: asset)
             if let avAsset {
                 do {
                     let tracks = try await avAsset.load(.tracks)
@@ -765,36 +751,60 @@ private struct CaptureViewer: View {
                 self.errorMessage = "Unable to load video."
             }
         } else {
-            let options = PHImageRequestOptions()
-            options.isSynchronous = false
-            options.isNetworkAccessAllowed = true
-            options.deliveryMode = .highQualityFormat
-            options.resizeMode = .fast
-
-            let imageWrapper = await withCheckedContinuation { (continuation: CheckedContinuation<ImageRequestResult, Never>) in
-                let gate = PhotoRequestContinuationGate(continuation: continuation)
-                PHImageManager.default().requestImage(
-                    for: asset,
-                    targetSize: preferredTargetSize,
-                    contentMode: .aspectFit,
-                    options: options
-                ) { image, info in
-                    let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
-                    let isCancelled = (info?[PHImageCancelledKey] as? Bool) ?? false
-                    guard !isDegraded, !isCancelled else { return }
-                    gate.resume(returning: ImageRequestResult(image: image))
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-                    gate.resume(returning: ImageRequestResult(image: nil))
-                }
-            }
-            let result = imageWrapper.image
-
+            let result = await PhotoAssetLoader.image(for: asset, targetSize: preferredTargetSize)
             self.image = result
             if result == nil {
                 self.errorMessage = "Unable to load image."
             }
         }
+    }
+}
+
+private enum PhotoAssetLoader {
+    static func videoAsset(for asset: PHAsset) async -> AVAsset? {
+        let options = PHVideoRequestOptions()
+        options.isNetworkAccessAllowed = true
+        options.deliveryMode = .automatic
+
+        let wrapper = await withCheckedContinuation { (continuation: CheckedContinuation<VideoAssetRequestResult, Never>) in
+            let gate = PhotoRequestContinuationGate(continuation: continuation)
+            PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
+                gate.resume(returning: VideoAssetRequestResult(asset: avAsset))
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                gate.resume(returning: VideoAssetRequestResult(asset: nil))
+            }
+        }
+
+        return wrapper.asset
+    }
+
+    static func image(for asset: PHAsset, targetSize: CGSize) async -> UIImage? {
+        let options = PHImageRequestOptions()
+        options.isSynchronous = false
+        options.isNetworkAccessAllowed = true
+        options.deliveryMode = .highQualityFormat
+        options.resizeMode = .fast
+
+        let wrapper = await withCheckedContinuation { (continuation: CheckedContinuation<ImageRequestResult, Never>) in
+            let gate = PhotoRequestContinuationGate(continuation: continuation)
+            PHImageManager.default().requestImage(
+                for: asset,
+                targetSize: targetSize,
+                contentMode: .aspectFit,
+                options: options
+            ) { image, info in
+                let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
+                let isCancelled = (info?[PHImageCancelledKey] as? Bool) ?? false
+                guard !isDegraded, !isCancelled else { return }
+                gate.resume(returning: ImageRequestResult(image: image))
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                gate.resume(returning: ImageRequestResult(image: nil))
+            }
+        }
+
+        return wrapper.image
     }
 }
 
