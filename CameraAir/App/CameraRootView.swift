@@ -738,27 +738,16 @@ private struct CaptureViewer: View {
             options.isNetworkAccessAllowed = true
             options.deliveryMode = .automatic
 
-            struct AssetWrapper: @unchecked Sendable {
-                let value: AVAsset?
-            }
-
-            let avAsset = await withCheckedContinuation { (continuation: CheckedContinuation<AVAsset?, Never>) in
-                var didResume = false
+            let avAssetWrapper = await withCheckedContinuation { (continuation: CheckedContinuation<VideoAssetRequestResult, Never>) in
+                let gate = PhotoRequestContinuationGate(continuation: continuation)
                 PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
-                    guard !didResume else { return }
-                    didResume = true
-                    let wrapper = AssetWrapper(value: avAsset)
-                    DispatchQueue.main.async {
-                        continuation.resume(returning: wrapper.value)
-                    }
+                    gate.resume(returning: VideoAssetRequestResult(asset: avAsset))
                 }
-                // Timeout after 10 seconds to prevent hanging
                 DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-                    guard !didResume else { return }
-                    didResume = true
-                    continuation.resume(returning: nil)
+                    gate.resume(returning: VideoAssetRequestResult(asset: nil))
                 }
             }
+            let avAsset = avAssetWrapper.asset
 
             if let avAsset {
                 do {
@@ -782,12 +771,8 @@ private struct CaptureViewer: View {
             options.deliveryMode = .highQualityFormat
             options.resizeMode = .fast
 
-            struct ImageWrapper: @unchecked Sendable {
-                let value: UIImage?
-            }
-
-            let result = await withCheckedContinuation { (continuation: CheckedContinuation<UIImage?, Never>) in
-                var didResume = false
+            let imageWrapper = await withCheckedContinuation { (continuation: CheckedContinuation<ImageRequestResult, Never>) in
+                let gate = PhotoRequestContinuationGate(continuation: continuation)
                 PHImageManager.default().requestImage(
                     for: asset,
                     targetSize: preferredTargetSize,
@@ -796,25 +781,44 @@ private struct CaptureViewer: View {
                 ) { image, info in
                     let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
                     let isCancelled = (info?[PHImageCancelledKey] as? Bool) ?? false
-                    guard !isDegraded, !isCancelled, !didResume else { return }
-                    didResume = true
-                    let wrapper = ImageWrapper(value: image)
-                    DispatchQueue.main.async {
-                        continuation.resume(returning: wrapper.value)
-                    }
+                    guard !isDegraded, !isCancelled else { return }
+                    gate.resume(returning: ImageRequestResult(image: image))
                 }
-                // Timeout after 10 seconds to prevent hanging
                 DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-                    guard !didResume else { return }
-                    didResume = true
-                    continuation.resume(returning: nil)
+                    gate.resume(returning: ImageRequestResult(image: nil))
                 }
             }
+            let result = imageWrapper.image
 
             self.image = result
             if result == nil {
                 self.errorMessage = "Unable to load image."
             }
         }
+    }
+}
+
+private struct VideoAssetRequestResult: @unchecked Sendable {
+    let asset: AVAsset?
+}
+
+private struct ImageRequestResult: @unchecked Sendable {
+    let image: UIImage?
+}
+
+private final class PhotoRequestContinuationGate<Result: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Result, Never>?
+
+    init(continuation: CheckedContinuation<Result, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume(returning result: Result) {
+        lock.lock()
+        let continuation = continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume(returning: result)
     }
 }
