@@ -735,7 +735,7 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
         }
     }
 
-    fileprivate static func requestPhotoLibraryAccess(accessLevel: PHAccessLevel = .addOnly) async -> Bool {
+    fileprivate static func requestPhotoLibraryAccess(accessLevel: PHAccessLevel = .readWrite) async -> Bool {
         switch PHPhotoLibrary.authorizationStatus(for: accessLevel) {
         case .authorized, .limited:
             return true
@@ -752,14 +752,14 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
 
     private static func saveVideoToLibrary(from url: URL) async throws -> PHAsset {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PHAsset, Error>) in
-            var capturedPlaceholder: PHObjectPlaceholder?
+            let placeholderBox = PhotoLibraryPlaceholderBox()
             PHPhotoLibrary.shared().performChanges({
                 let creationRequest = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
-                capturedPlaceholder = creationRequest?.placeholderForCreatedAsset
+                placeholderBox.placeholder = creationRequest?.placeholderForCreatedAsset
             }) { success, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else if success, let placeholder = capturedPlaceholder {
+                } else if success, let placeholder = placeholderBox.placeholder {
                     let assets = PHAsset.fetchAssets(withLocalIdentifiers: [placeholder.localIdentifier], options: nil)
                     if let asset = assets.firstObject {
                         continuation.resume(returning: asset)
@@ -877,18 +877,18 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
                 return
             }
 
-            var capturedPlaceholder: PHObjectPlaceholder?
+            let placeholderBox = PhotoLibraryPlaceholderBox()
             PHPhotoLibrary.shared().performChanges({
                 let creationRequest = PHAssetCreationRequest.forAsset()
                 creationRequest.addResource(with: .photo, data: photoData, options: nil)
                 if let livePhotoMovieURL {
                     creationRequest.addResource(with: .pairedVideo, fileURL: livePhotoMovieURL, options: nil)
                 }
-                capturedPlaceholder = creationRequest.placeholderForCreatedAsset
+                placeholderBox.placeholder = creationRequest.placeholderForCreatedAsset
             }) { success, error in
                 if let error {
                     continuation.resume(throwing: error)
-                } else if success, let placeholder = capturedPlaceholder {
+                } else if success, let placeholder = placeholderBox.placeholder {
                     let assets = PHAsset.fetchAssets(withLocalIdentifiers: [placeholder.localIdentifier], options: nil)
                     if let asset = assets.firstObject {
                         continuation.resume(returning: asset)
@@ -929,4 +929,8 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
             image.draw(at: CGPoint(x: -cropRect.origin.x, y: -cropRect.origin.y))
         }
     }
+}
+
+private final class PhotoLibraryPlaceholderBox: @unchecked Sendable {
+    var placeholder: PHObjectPlaceholder?
 }
