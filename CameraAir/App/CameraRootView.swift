@@ -536,7 +536,11 @@ private struct OptionStrip<Option: Hashable & Identifiable>: View {
     let onSelect: (Option) -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 92), spacing: 8)],
+            alignment: .leading,
+            spacing: 8
+        ) {
             ForEach(options) { option in
                 Button {
                     onSelect(option)
