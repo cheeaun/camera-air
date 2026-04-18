@@ -61,7 +61,7 @@ struct CameraRootView: View {
     private var previewLayer: some View {
         GeometryReader { geometry in
             let screenSize = geometry.size
-            let cropRatio = controller.settings.aspectRatio.cropRatio
+            let cropRatio = controller.settings.aspectRatio.cropRatio(for: controller.settings.aspectOrientation)
             let screenAspect = screenSize.width / max(screenSize.height, 1)
 
             let fitWidth: CGFloat
@@ -135,12 +135,13 @@ struct CameraRootView: View {
                 onSelect: controller.setFlash
             )
 
-            Button {
-                controller.cycleAspectRatio()
-            } label: {
-                StatusPill(text: controller.settings.aspectRatio.title, systemImage: "rectangle.compress.vertical")
-            }
-            .buttonStyle(.plain)
+            AspectRatioControls(
+                ratioText: controller.settings.aspectRatio.title(for: controller.settings.aspectOrientation),
+                isRatioEnabled: !controller.settings.aspectOrientation.isSquare,
+                orientation: controller.settings.aspectOrientation,
+                onRatioTap: controller.cycleAspectRatio,
+                onOrientationTap: controller.cycleAspectOrientation
+            )
 
             ToggleChip(
                 accessibilityLabel: controller.settings.isExposureLocked ? "Exposure locked" : "Exposure",
@@ -344,6 +345,41 @@ struct CameraRootView: View {
             }
         }
         .padding(22)
+    }
+}
+
+private struct AspectRatioControls: View {
+    let ratioText: String
+    let isRatioEnabled: Bool
+    let orientation: AspectOrientation
+    let onRatioTap: () -> Void
+    let onOrientationTap: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(action: onRatioTap) {
+                StatusPill(
+                    text: ratioText,
+                    systemImage: "rectangle.compress.vertical",
+                    isEnabled: isRatioEnabled
+                )
+                .frame(height: 38)
+            }
+            .buttonStyle(.plain)
+            .disabled(!isRatioEnabled)
+
+            Button(action: onOrientationTap) {
+                StatusPill(
+                    text: "",
+                    systemImage: orientation.systemImage,
+                    isEnabled: true,
+                    isActive: true
+                )
+                .frame(width: 44, height: 38)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Aspect orientation \(orientation.rawValue)"))
+        }
     }
 }
 
@@ -710,7 +746,9 @@ private struct StatusPill: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: systemImage)
-            Text(text)
+            if !text.isEmpty {
+                Text(text)
+            }
         }
         .font(.system(size: 12, weight: .semibold, design: .rounded))
         .foregroundStyle(.white.opacity(isEnabled ? 0.86 : 0.4))

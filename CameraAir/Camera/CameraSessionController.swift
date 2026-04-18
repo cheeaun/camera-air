@@ -243,15 +243,44 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     func setAspectRatio(_ aspectRatio: AspectRatioOption) {
         publish {
             self.settings.aspectRatio = aspectRatio
+            if aspectRatio.isSquare {
+                self.settings.aspectOrientation = .square
+            } else if self.settings.aspectOrientation == .square {
+                self.settings.aspectOrientation = .portrait
+            }
         }
         saveSettings()
     }
 
     func cycleAspectRatio() {
-        let allCases = AspectRatioOption.allCases
+        guard !settings.aspectOrientation.isSquare else { return }
+
+        let allCases = AspectRatioOption.allCases.filter { !$0.isSquare }
         guard let currentIndex = allCases.firstIndex(of: settings.aspectRatio) else { return }
         let nextIndex = (currentIndex + 1) % allCases.count
         setAspectRatio(allCases[nextIndex])
+    }
+
+    func cycleAspectOrientation() {
+        let nextOrientation: AspectOrientation
+        switch settings.aspectOrientation {
+        case .portrait:
+            nextOrientation = .square
+        case .square:
+            nextOrientation = .landscape
+        case .landscape:
+            nextOrientation = .portrait
+        }
+
+        publish {
+            self.settings.aspectOrientation = nextOrientation
+            if nextOrientation == .square {
+                self.settings.aspectRatio = .square
+            } else if self.settings.aspectRatio.isSquare {
+                self.settings.aspectRatio = .portrait34
+            }
+        }
+        saveSettings()
     }
 
     func setNightMode(_ nightMode: NightModePreference) {

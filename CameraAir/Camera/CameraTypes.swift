@@ -141,6 +141,67 @@ enum AspectRatioOption: String, CaseIterable, Identifiable, Codable {
         default: return self
         }
     }
+
+    var isSquare: Bool {
+        self == .square
+    }
+
+    func title(for orientation: AspectOrientation) -> String {
+        switch self {
+        case .square:
+            return "1:1"
+        case .portrait34:
+            return orientation == .portrait ? "3:4" : "4:3"
+        case .portrait916, .vertical:
+            return orientation == .portrait ? "9:16" : "16:9"
+        case .classic32, .classic:
+            return orientation == .portrait ? "3:2" : "2:3"
+        case .standard43, .standard:
+            return orientation == .portrait ? "4:3" : "3:4"
+        case .widescreen169, .widescreen:
+            return orientation == .portrait ? "16:9" : "9:16"
+        }
+    }
+
+    func cropRatio(for orientation: AspectOrientation) -> CGFloat {
+        switch self {
+        case .portrait34:
+            return orientation == .portrait ? 3.0 / 4.0 : 4.0 / 3.0
+        case .portrait916, .vertical:
+            return orientation == .portrait ? 9.0 / 16.0 : 16.0 / 9.0
+        case .square:
+            return 1.0
+        case .classic32, .classic:
+            return orientation == .portrait ? 3.0 / 2.0 : 2.0 / 3.0
+        case .standard43, .standard:
+            return orientation == .portrait ? 4.0 / 3.0 : 3.0 / 4.0
+        case .widescreen169, .widescreen:
+            return orientation == .portrait ? 16.0 / 9.0 : 9.0 / 16.0
+        }
+    }
+}
+
+enum AspectOrientation: String, CaseIterable, Identifiable, Codable {
+    case portrait
+    case landscape
+    case square
+
+    var id: String { rawValue }
+
+    var systemImage: String {
+        switch self {
+        case .portrait:
+            return "rectangle.portrait"
+        case .landscape:
+            return "rectangle"
+        case .square:
+            return "square"
+        }
+    }
+
+    var isSquare: Bool {
+        self == .square
+    }
 }
 
 enum NightModePreference: String, CaseIterable, Identifiable, Codable {
@@ -192,6 +253,7 @@ struct CameraSettings: Equatable, Codable {
     var isLivePhotoEnabled = true
     var isExposureLocked = false
     var aspectRatio: AspectRatioOption = .portrait34
+    var aspectOrientation: AspectOrientation = .portrait
     var nightMode: NightModePreference = .auto
     var zoomLevel: ZoomLevel = .standard
     var customZoomFactor: CGFloat = 1.0
@@ -201,6 +263,7 @@ struct CameraSettings: Equatable, Codable {
         isLivePhotoEnabled: Bool = true,
         isExposureLocked: Bool = false,
         aspectRatio: AspectRatioOption = .portrait34,
+        aspectOrientation: AspectOrientation = .portrait,
         nightMode: NightModePreference = .auto,
         zoomLevel: ZoomLevel = .standard,
         customZoomFactor: CGFloat = 1.0
@@ -209,6 +272,7 @@ struct CameraSettings: Equatable, Codable {
         self.isLivePhotoEnabled = isLivePhotoEnabled
         self.isExposureLocked = isExposureLocked
         self.aspectRatio = aspectRatio
+        self.aspectOrientation = aspectOrientation
         self.nightMode = nightMode
         self.zoomLevel = zoomLevel
         self.customZoomFactor = customZoomFactor
@@ -223,6 +287,7 @@ struct CameraSettings: Equatable, Codable {
         // Normalize legacy aspect ratio values
         let rawAspectRatio = (try? container.decode(AspectRatioOption.self, forKey: .aspectRatio)) ?? defaults.aspectRatio
         aspectRatio = rawAspectRatio.normalized
+        aspectOrientation = (try? container.decode(AspectOrientation.self, forKey: .aspectOrientation)) ?? defaults.aspectOrientation
         nightMode = (try? container.decode(NightModePreference.self, forKey: .nightMode)) ?? defaults.nightMode
         zoomLevel = (try? container.decode(ZoomLevel.self, forKey: .zoomLevel)) ?? defaults.zoomLevel
         customZoomFactor = (try? container.decode(CGFloat.self, forKey: .customZoomFactor)) ?? defaults.customZoomFactor
