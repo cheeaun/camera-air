@@ -483,14 +483,20 @@ private struct ZoomFactorSlider: View {
                 .frame(height: 28)
             }
 
-            HStack(spacing: 0) {
-                ForEach(supportedFactors, id: \.self) { factor in
-                    Text(factor.cameraZoomLabel)
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundStyle(abs(factor - value) < 0.05 ? .white : .white.opacity(0.55))
-                        .frame(maxWidth: .infinity)
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    ForEach(supportedFactors, id: \.self) { factor in
+                        Text(factor.cameraZoomLabel)
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(abs(factor - value) < 0.05 ? .white : .white.opacity(0.55))
+                            .position(
+                                x: labelX(for: factor, in: geometry.size.width),
+                                y: 8
+                            )
+                    }
                 }
             }
+            .frame(height: 16)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -529,6 +535,16 @@ private struct ZoomFactorSlider: View {
         let clampedX = min(max(locationX, 0), width)
         let progress = clampedX / width
         return range.lowerBound + (range.upperBound - range.lowerBound) * progress
+    }
+
+    private func labelX(for factor: CGFloat, in width: CGFloat) -> CGFloat {
+        guard width > 0 else { return 0 }
+
+        let span = range.upperBound - range.lowerBound
+        guard span > 0 else { return width / 2 }
+
+        let progress = min(max((factor - range.lowerBound) / span, 0), 1)
+        return progress * width
     }
 }
 
