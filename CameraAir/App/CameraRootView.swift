@@ -206,12 +206,16 @@ struct CameraRootView: View {
     private var bottomBar: some View {
         VStack(spacing: 20) {
             statusRow
-            ModeStrip(selection: controller.mode, onSelect: controller.setMode)
-                .padding(.horizontal, 24)
 
             HStack(alignment: .center, spacing: 16) {
                 thumbnailButton
-                captureButton
+                DualCaptureControl(
+                    mode: controller.mode,
+                    isRecording: controller.isRecording,
+                    recordingDuration: controller.recordingDuration,
+                    onPhotoTap: handlePhotoSnapTap,
+                    onVideoTap: handleVideoSnapTap
+                )
                 lensButton
             }
             .padding(.horizontal, 22)
@@ -272,41 +276,6 @@ struct CameraRootView: View {
         )
     }
 
-    private var captureButton: some View {
-        Button {
-            controller.performPrimaryAction()
-        } label: {
-            ZStack {
-                Circle()
-                    .strokeBorder(.white.opacity(0.4), lineWidth: 2)
-                    .frame(width: 84, height: 84)
-
-                Circle()
-                    .fill(Color.white.opacity(0.12))
-                    .frame(width: 78, height: 78)
-
-                if controller.mode == .video && controller.isRecording {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.red)
-                        .frame(width: 32, height: 32)
-
-                    Text(formatDuration(controller.recordingDuration))
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white)
-                } else {
-                    Circle()
-                        .fill(controller.mode == .video ? Color.red : Color.white)
-                        .frame(width: controller.mode == .video ? 58 : 64, height: controller.mode == .video ? 58 : 64)
-                }
-            }
-            .frame(width: 84, height: 84)
-            .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .scaleEffect(controller.isRecording ? 0.94 : 1)
-        .shadow(color: controller.mode == .video ? Color.red.opacity(0.22) : .white.opacity(0.12), radius: 24, y: 12)
-    }
-
     private var lensButton: some View {
         Button {
             controller.switchLens()
@@ -329,10 +298,21 @@ struct CameraRootView: View {
         .buttonStyle(.plain)
     }
 
-    private func formatDuration(_ duration: TimeInterval) -> String {
-        let minutes = Int(duration) / 60
-        let seconds = Int(duration) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+    private func handlePhotoSnapTap() {
+        guard !controller.isRecording else { return }
+        if controller.mode == .photo {
+            controller.performPrimaryAction()
+        } else {
+            controller.setMode(.photo)
+        }
+    }
+
+    private func handleVideoSnapTap() {
+        if controller.mode == .video {
+            controller.performPrimaryAction()
+        } else if !controller.isRecording {
+            controller.setMode(.video)
+        }
     }
 
     private var permissionOverlay: some View {
@@ -361,43 +341,101 @@ struct CameraRootView: View {
     }
 }
 
-private struct ModeStrip: View {
-    @Namespace private var selectionNamespace
+private struct DualCaptureControl: View {
+    @Namespace private var activeRingNamespace
 
-    let selection: CaptureMode
-    let onSelect: (CaptureMode) -> Void
+    let mode: CaptureMode
+    let isRecording: Bool
+    let recordingDuration: TimeInterval
+    let onPhotoTap: () -> Void
+    let onVideoTap: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(CaptureMode.allCases) { mode in
-                Button {
-                    onSelect(mode)
-                } label: {
-                    Text(mode.title.uppercased())
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .tracking(0.6)
-                        .foregroundStyle(selection == mode ? .white : .white.opacity(0.6))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .frame(width: 78)
-                        .background {
-                            if selection == mode {
-                                Capsule()
-                                    .fill(Color.white.opacity(0.2))
-                                    .matchedGeometryEffect(id: "mode-selection", in: selectionNamespace)
-                            }
-                        }
+        HStack(alignment: .top, spacing: 22) {
+            snapButton(for: .photo, action: onPhotoTap)
+            snapButton(for: .video, action: onVideoTap)
+        }
+        .fixedSize()
+    }
+
+    private func snapButton(for buttonMode: CaptureMode, action: @escaping () -> Void) -> some View {
+        let isActive = mode == buttonMode
+        let isDisabledInactivePhotoWhileRecording = isRecording && buttonMode == .photo && !isActive
+
+        return Button(action: action) {
+            VStack(spacing: 9) {
+                ZStack {
+                    if isActive {
+                        Circle()
+                            .strokeBorder(Color.white.opacity(0.82), lineWidth: 2)
+                            .frame(width: 70, height: 70)
+                            .matchedGeometryEffect(id: "active-snap-ring", in: activeRingNamespace)
+                    }
+
+                    Circle()
+                        .fill(fillColor(for: buttonMode, isActive: isActive))
+                        .frame(width: isActive ? 58 : 50, height: isActive ? 58 : 50)
+                        .shadow(
+                            color: buttonMode == .video && isActive ? Color.red.opacity(0.22) : .clear,
+                            radius: 18,
+                            y: 8
+                        )
+
+                    if buttonMode == .video && isActive && isRecording {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(Color.white.opacity(0.92))
+                            .frame(width: 26, height: 26)
+                            .transition(.scale.combined(with: .opacity))
+                    }
                 }
-                .buttonStyle(.plain)
+                .frame(width: 74, height: 74)
+                .contentShape(Circle())
+
+                VStack(spacing: 2) {
+                    Text(buttonMode.title.uppercased())
+                        .font(.system(size: 12, weight: isActive ? .medium : .regular, design: .rounded))
+                        .tracking(0.6)
+                        .foregroundStyle(labelColor(isActive: isActive, isDisabled: isDisabledInactivePhotoWhileRecording))
+
+                    if buttonMode == .video && isActive && isRecording {
+                        Text(Self.formatDuration(recordingDuration))
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                .frame(height: isRecording && buttonMode == .video && isActive ? 30 : 16, alignment: .top)
             }
         }
-        .padding(2)
-        .background {
-            Capsule()
-                .fill(Color.white.opacity(0.1))
+        .buttonStyle(.plain)
+        .disabled(isDisabledInactivePhotoWhileRecording)
+        .scaleEffect(isActive && isRecording ? 0.96 : 1)
+        .animation(.snappy(duration: 0.24), value: mode)
+        .animation(.snappy(duration: 0.2), value: isRecording)
+        .accessibilityLabel(Text(buttonMode == .photo ? "Photo" : "Video"))
+    }
+
+    private func fillColor(for buttonMode: CaptureMode, isActive: Bool) -> Color {
+        switch buttonMode {
+        case .photo:
+            return isActive ? Color.white.opacity(0.94) : Color.white.opacity(0.52)
+        case .video:
+            return isActive ? Color.red : Color(red: 0.62, green: 0.08, blue: 0.1).opacity(0.82)
         }
-        .glassEffect(.regular.tint(Color.white.opacity(0.05)), in: Capsule())
-        .fixedSize()
+    }
+
+    private func labelColor(isActive: Bool, isDisabled: Bool) -> Color {
+        if isDisabled {
+            return .white.opacity(0.26)
+        }
+
+        return isActive ? .white.opacity(0.84) : .white.opacity(0.38)
+    }
+
+    private static func formatDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration) / 60
+        let seconds = Int(duration) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 }
 
