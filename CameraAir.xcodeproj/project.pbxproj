@@ -26,7 +26,6 @@
 		A00000000000000000000015 /* CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewView.swift; sourceTree = "<group>"; };
 		A00000000000000000000016 /* CameraAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraAppIntents.swift; sourceTree = "<group>"; };
 		A00000000000000000000017 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A00000000000000000000018 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -43,7 +42,6 @@
 		A00000000000000000000002 = {
 			isa = PBXGroup;
 			children = (
-				9B544F362F88FFF200751366 /* Assets.xcassets */,
 				A00000000000000000000003 /* CameraAir */,
 				A00000000000000000000004 /* Products */,
 			);
@@ -99,7 +97,7 @@
 		A00000000000000000000008 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				A00000000000000000000018 /* Assets.xcassets */,
+				9B544F362F88FFF200751366 /* Assets.xcassets */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
