@@ -131,6 +131,13 @@ struct CameraRootView: View {
                 onSelect: controller.setFlash
             )
 
+            Button {
+                controller.cycleAspectRatio()
+            } label: {
+                StatusPill(text: controller.settings.aspectRatio.title, systemImage: "rectangle.compress.vertical")
+            }
+            .buttonStyle(.plain)
+
             ToggleChip(
                 accessibilityLabel: controller.settings.isExposureLocked ? "Exposure locked" : "Exposure",
                 icon: controller.settings.isExposureLocked ? "camera.metering.center.weighted.average" : "camera.aperture",
@@ -168,21 +175,6 @@ struct CameraRootView: View {
     private var settingsPanel: some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Aspect Ratio", systemImage: "aspectratio")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.8))
-
-                    OptionStrip(
-                        title: "Aspect Ratio",
-                        options: AspectRatioOption.allCases,
-                        selection: controller.settings.aspectRatio,
-                        label: \.title
-                    ) { option in
-                        controller.setAspectRatio(option)
-                    }
-                }
-
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Low Light Boost", systemImage: "moon.haze")
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
@@ -227,14 +219,7 @@ struct CameraRootView: View {
     }
 
     private var statusRow: some View {
-        HStack(spacing: 8) {
-            Button {
-                controller.cycleAspectRatio()
-            } label: {
-                StatusPill(text: controller.settings.aspectRatio.title, systemImage: "rectangle.compress.vertical")
-            }
-            .buttonStyle(.plain)
-
+        HStack(spacing: 0) {
             if controller.capabilities.supportedZoomFactors.count > 1 {
                 ZoomFactorSlider(
                     value: $zoomSliderValue,
@@ -247,10 +232,6 @@ struct CameraRootView: View {
                 )
                 .frame(maxWidth: .infinity)
             }
-
-            Spacer(minLength: 0)
-
-
         }
         .padding(.horizontal, 20)
     }
@@ -396,9 +377,9 @@ private struct ModeStrip: View {
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .tracking(0.6)
                         .foregroundStyle(selection == mode ? .white : .white.opacity(0.6))
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 14)
                         .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity)
+                        .frame(width: 78)
                         .background {
                             if selection == mode {
                                 Capsule()
@@ -416,6 +397,7 @@ private struct ModeStrip: View {
                 .fill(Color.white.opacity(0.1))
         }
         .glassEffect(.regular.tint(Color.white.opacity(0.05)), in: Capsule())
+        .fixedSize()
     }
 }
 
