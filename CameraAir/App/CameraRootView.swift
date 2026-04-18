@@ -485,14 +485,13 @@ private struct ZoomFactorSlider: View {
 
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    ForEach(supportedFactors, id: \.self) { factor in
-                        Text(factor.cameraZoomLabel)
+                    let laidOutLabels = laidOutZoomLabels(in: geometry.size.width)
+                    ForEach(Array(laidOutLabels.enumerated()), id: \.offset) { _, label in
+                        Text(label.text)
                             .font(.system(size: 10, weight: .medium, design: .rounded))
-                            .foregroundStyle(abs(factor - value) < 0.05 ? .white : .white.opacity(0.55))
-                            .position(
-                                x: labelX(for: factor, in: geometry.size.width),
-                                y: 8
-                            )
+                            .foregroundStyle(abs(label.factor - value) < 0.05 ? .white : .white.opacity(0.55))
+                            .frame(width: label.width, alignment: .center)
+                            .position(x: label.centerX, y: 8)
                     }
                 }
             }
@@ -545,6 +544,49 @@ private struct ZoomFactorSlider: View {
 
         let progress = min(max((factor - range.lowerBound) / span, 0), 1)
         return progress * width
+    }
+
+    private struct ZoomLabelLayout {
+        let factor: CGFloat
+        let text: String
+        let width: CGFloat
+        let centerX: CGFloat
+    }
+
+    private func laidOutZoomLabels(in width: CGFloat) -> [ZoomLabelLayout] {
+        guard width > 0 else { return [] }
+
+        let fontCharacterWidth: CGFloat = 5.4
+        let minGap: CGFloat = 6
+        let maxLabels = supportedFactors.sorted().map { factor -> (factor: CGFloat, text: String, width: CGFloat, targetX: CGFloat) in
+            let text = factor.cameraZoomLabel
+            let labelWidth = max(18, CGFloat(text.count) * fontCharacterWidth)
+            return (factor, text, labelWidth, labelX(for: factor, in: width))
+        }
+
+        var laidOut: [ZoomLabelLayout] = []
+        var previousRightEdge: CGFloat = -CGFloat.greatestFiniteMagnitude
+
+        for label in maxLabels {
+            let halfWidth = label.width / 2
+            var centerX = min(max(label.targetX, halfWidth), width - halfWidth)
+            if centerX - halfWidth < previousRightEdge + minGap {
+                centerX = previousRightEdge + minGap + halfWidth
+            }
+            centerX = min(centerX, width - halfWidth)
+            previousRightEdge = centerX + halfWidth
+
+            laidOut.append(
+                ZoomLabelLayout(
+                    factor: label.factor,
+                    text: label.text,
+                    width: label.width,
+                    centerX: centerX
+                )
+            )
+        }
+
+        return laidOut
     }
 }
 
