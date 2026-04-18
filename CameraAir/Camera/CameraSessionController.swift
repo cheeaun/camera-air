@@ -40,6 +40,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private var pendingRoute: CameraRoute?
     private var isOpeningCapture = false
 
+    private let displayZoomCeiling: CGFloat = 10.0
+
     override init() {
         super.init()
         loadSettings()
@@ -520,7 +522,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private func refreshCapabilities() {
         let device = currentVideoInput?.device
         let minZoom = displayZoomFactor(for: device?.minAvailableVideoZoomFactor ?? 1.0, on: device)
-        let maxZoom = displayZoomFactor(for: device?.maxAvailableVideoZoomFactor ?? 1.0, on: device)
+        let maxZoom = min(displayZoomFactor(for: device?.maxAvailableVideoZoomFactor ?? 1.0, on: device), displayZoomCeiling)
         let supportedZoomFactors = supportedPhysicalZoomFactors(for: device)
         let supportedZoomLevels = supportedZoomFactors.compactMap(Self.zoomLevel(for:))
 
@@ -564,7 +566,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         let hasUltraWide = constituentTypes.contains(.builtInUltraWideCamera)
         let hasTelephoto = constituentTypes.contains(.builtInTelephotoCamera)
         let minZoom = displayZoomFactor(for: device.minAvailableVideoZoomFactor, on: device)
-        let maxZoom = displayZoomFactor(for: device.maxAvailableVideoZoomFactor, on: device)
+        let maxZoom = min(displayZoomFactor(for: device.maxAvailableVideoZoomFactor, on: device), displayZoomCeiling)
 
         factors.insert(roundedZoomFactor(minZoom))
         factors.insert(roundedZoomFactor(maxZoom))
@@ -582,7 +584,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
 
         if maxZoom > 1.0 {
-            factors.insert(roundedZoomFactor(min(maxZoom, 2.0)))
+            factors.insert(roundedZoomFactor(maxZoom))
         }
 
         let sortedFactors = factors.sorted()

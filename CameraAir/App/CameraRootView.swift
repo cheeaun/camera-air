@@ -424,6 +424,8 @@ private struct ZoomFactorSlider: View {
 
     let supportedFactors: [CGFloat]
     let onEditingChanged: (Bool) -> Void
+    @State private var touchStartLocation: CGFloat?
+    @State private var didDrag = false
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
@@ -433,22 +435,52 @@ private struct ZoomFactorSlider: View {
                     .foregroundStyle(.white)
                     .frame(width: 38, alignment: .trailing)
 
-                Slider(
-                    value: Binding(
-                        get: { Double(value) },
-                        set: { value = CGFloat($0) }
-                    ),
-                    in: Double(range.lowerBound)...Double(range.upperBound),
-                    step: 0.05,
-                    onEditingChanged: { editing in
-                        if !editing {
-                            // Snap to nearest factor when editing ends
-                            value = nearestFactor(to: value)
+                GeometryReader { geometry in
+                    Slider(
+                        value: Binding(
+                            get: { Double(value) },
+                            set: { value = CGFloat($0) }
+                        ),
+                        in: Double(range.lowerBound)...Double(range.upperBound),
+                        step: 0.05,
+                        onEditingChanged: { editing in
+                            if !editing {
+                                // Snap to nearest factor when editing ends
+                                value = nearestFactor(to: value)
+                            }
+                            onEditingChanged(editing)
                         }
-                        onEditingChanged(editing)
-                    }
-                )
-                .tint(.white)
+                    )
+                    .tint(.white)
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { gesture in
+                                if touchStartLocation == nil {
+                                    touchStartLocation = gesture.location.x
+                                }
+
+                                let start = touchStartLocation ?? gesture.location.x
+                                let movedDistance = abs(gesture.location.x - start)
+                                didDrag = didDrag || movedDistance > 8
+
+                                let rawFactor = factor(for: gesture.location.x, in: geometry.size.width)
+                                value = didDrag ? stepRoundedFactor(from: rawFactor) : rawFactor
+                            }
+                            .onEnded { _ in
+                                if didDrag {
+                                    value = stepRoundedFactor(from: value)
+                                } else {
+                                    value = nearestNiceFactor(to: value)
+                                }
+
+                                touchStartLocation = nil
+                                didDrag = false
+                                onEditingChanged(false)
+                            }
+                    )
+                }
+                .frame(height: 28)
             }
 
             HStack(spacing: 0) {
@@ -474,6 +506,29 @@ private struct ZoomFactorSlider: View {
 
     private func nearestFactor(to value: CGFloat) -> CGFloat {
         supportedFactors.min(by: { abs($0 - value) < abs($1 - value) }) ?? value
+    }
+
+    private func nearestNiceFactor(to value: CGFloat) -> CGFloat {
+        let niceFactors: [CGFloat] = [0.5, 1.0, 2.0, 3.0, 5.0, 10.0].filter {
+            $0 >= Double(range.lowerBound) && $0 <= Double(range.upperBound)
+        }.map { CGFloat($0) }
+
+        let candidates = niceFactors.isEmpty ? supportedFactors : niceFactors
+        return candidates.min(by: { abs($0 - value) < abs($1 - value) }) ?? nearestFactor(to: value)
+    }
+
+    private func stepRoundedFactor(from value: CGFloat) -> CGFloat {
+        let step: CGFloat = 0.05
+        let quantized = (value / step).rounded() * step
+        return min(max(quantized, range.lowerBound), range.upperBound)
+    }
+
+    private func factor(for locationX: CGFloat, in width: CGFloat) -> CGFloat {
+        guard width > 0 else { return value }
+
+        let clampedX = min(max(locationX, 0), width)
+        let progress = clampedX / width
+        return range.lowerBound + (range.upperBound - range.lowerBound) * progress
     }
 }
 
