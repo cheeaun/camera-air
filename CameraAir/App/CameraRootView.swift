@@ -351,7 +351,7 @@ private struct DualCaptureControl: View {
     let onVideoTap: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 22) {
+        HStack(alignment: .top, spacing: 5) {
             snapButton(for: .photo, action: onPhotoTap)
             snapButton(for: .video, action: onVideoTap)
         }
