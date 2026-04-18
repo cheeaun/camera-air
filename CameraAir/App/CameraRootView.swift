@@ -128,7 +128,7 @@ struct CameraRootView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             FlashMenu(
                 selection: controller.settings.flash,
                 isEnabled: controller.capabilities.hasFlash,
@@ -356,28 +356,26 @@ private struct AspectRatioControls: View {
     let onOrientationTap: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Button(action: onRatioTap) {
-                StatusPill(
-                    text: ratioText,
-                    systemImage: "rectangle.compress.vertical",
-                    isEnabled: isRatioEnabled
-                )
-                .frame(height: 38)
+                Text(ratioText)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(isRatioEnabled ? 0.86 : 0.4))
+                    .frame(minWidth: 58, minHeight: 38)
+                    .padding(.horizontal, 10)
             }
             .buttonStyle(.plain)
             .disabled(!isRatioEnabled)
+            .glassCapsule(interactive: true, isActive: false)
 
             Button(action: onOrientationTap) {
-                StatusPill(
-                    text: "",
-                    systemImage: orientation.systemImage,
-                    isEnabled: true,
-                    isActive: true
-                )
-                .frame(width: 44, height: 38)
+                Image(systemName: orientation.systemImage)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 38)
             }
             .buttonStyle(.plain)
+            .glassCapsule(interactive: true, isActive: true)
             .accessibilityLabel(Text("Aspect orientation \(orientation.rawValue)"))
         }
     }
