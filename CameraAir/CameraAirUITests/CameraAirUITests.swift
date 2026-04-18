@@ -27,6 +27,8 @@ final class CameraAirUITests: XCTestCase {
         app.launchEnvironment["CAMERA_AIR_UI_TEST_LIVE_PHOTO_SUPPORTED"] = "0"
         app.launch()
 
-        XCTAssertFalse(app.buttons["Live photo"].waitForExistence(timeout: 2))
+        let livePhotoToggle = app.buttons["Live photo"]
+        XCTAssertTrue(livePhotoToggle.waitForExistence(timeout: 5))
+        XCTAssertFalse(livePhotoToggle.isEnabled)
     }
 }

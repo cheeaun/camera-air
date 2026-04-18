@@ -158,6 +158,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             guard let strongSelf = self else { return }
             strongSelf.session.beginConfiguration()
             strongSelf.session.sessionPreset = mode == .photo ? .photo : .high
+            strongSelf.configureMovieOutput(for: mode)
             strongSelf.session.commitConfiguration()
             strongSelf.updatePhotoOutputDimensions()
             strongSelf.applyCaptureSettings()
@@ -367,9 +368,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 strongSelf.photoOutput.maxPhotoQualityPrioritization = .speed
             }
 
-            if strongSelf.session.canAddOutput(strongSelf.movieOutput) {
-                strongSelf.session.addOutput(strongSelf.movieOutput)
-            }
+            strongSelf.configureMovieOutput(for: strongSelf.mode)
 
             strongSelf.session.commitConfiguration()
             strongSelf.isConfigured = true
@@ -503,6 +502,19 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
 
         applyZoomSettings(animated: false)
+    }
+
+    private func configureMovieOutput(for mode: CaptureMode) {
+        if mode == .photo {
+            if session.outputs.contains(movieOutput) {
+                session.removeOutput(movieOutput)
+            }
+            return
+        }
+
+        if !session.outputs.contains(movieOutput), session.canAddOutput(movieOutput) {
+            session.addOutput(movieOutput)
+        }
     }
 
     private func applyZoomSettings(animated: Bool) {

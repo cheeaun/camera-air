@@ -151,14 +151,16 @@ struct CameraRootView: View {
                 controller.toggleExposureLock()
             }
 
-            if controller.mode == .photo && controller.capabilities.supportsLivePhoto {
+            if controller.mode == .photo {
                 ToggleChip(
                     accessibilityLabel: "Live photo",
                     icon: controller.settings.isLivePhotoEnabled ? "livephoto" : "livephoto.slash",
                     isOn: controller.settings.isLivePhotoEnabled,
-                    isEnabled: true
+                    isEnabled: controller.capabilities.supportsLivePhoto
                 ) {
-                    controller.toggleLivePhoto()
+                    if controller.capabilities.supportsLivePhoto {
+                        controller.toggleLivePhoto()
+                    }
                 }
             }
 
