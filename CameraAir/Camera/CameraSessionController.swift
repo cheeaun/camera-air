@@ -41,11 +41,25 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private var isOpeningCapture = false
 
     private let displayZoomCeiling: CGFloat = 10.0
+    private let livePhotoSupportOverride: Bool?
 
     override init() {
+        let env = ProcessInfo.processInfo.environment
+        if let overrideValue = env["CAMERA_AIR_UI_TEST_LIVE_PHOTO_SUPPORTED"] {
+            livePhotoSupportOverride = (overrideValue as NSString).boolValue
+        } else {
+            livePhotoSupportOverride = nil
+        }
         super.init()
+        if let livePhotoSupportOverride {
+            capabilities.supportsLivePhoto = livePhotoSupportOverride
+        }
         loadSettings()
         loadLastCapturedAsset()
+    }
+
+    var isRunningUITests: Bool {
+        ProcessInfo.processInfo.arguments.contains("-ui-testing")
     }
 
     private func loadSettings() {
@@ -89,6 +103,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func prepare() {
+        if isRunningUITests {
+            return
+        }
         guard !hasPrepared else { return }
         hasPrepared = true
 
@@ -528,7 +545,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
         let newCapabilities = CameraCapabilities(
             hasFlash: device?.hasFlash ?? false,
-            supportsLivePhoto: photoOutput.isLivePhotoCaptureSupported && (device?.position == .back), // Live Photos typically only supported on back camera
+            supportsLivePhoto: livePhotoSupportOverride ?? photoOutput.isLivePhotoCaptureSupported,
             supportsLowLightBoost: device?.isLowLightBoostSupported ?? false,
             supportsExposureLock: device?.isExposureModeSupported(.locked) ?? false,
             supportedZoomLevels: supportedZoomLevels,

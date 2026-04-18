@@ -7,10 +7,14 @@ struct CameraRootView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
 
-    @StateObject private var controller = CameraSessionController()
+    @StateObject private var controller: CameraSessionController
     @State private var isSettingsExpanded = false
     @State private var isThumbnailPressed = false
     @State private var zoomSliderValue: CGFloat = 1.0
+
+    init(controller: @autoclosure @escaping () -> CameraSessionController = CameraSessionController()) {
+        _controller = StateObject(wrappedValue: controller())
+    }
 
     var body: some View {
         ZStack {
@@ -147,12 +151,12 @@ struct CameraRootView: View {
                 controller.toggleExposureLock()
             }
 
-            if controller.mode == .photo {
+            if controller.mode == .photo && controller.capabilities.supportsLivePhoto {
                 ToggleChip(
                     accessibilityLabel: "Live photo",
                     icon: controller.settings.isLivePhotoEnabled ? "livephoto" : "livephoto.slash",
                     isOn: controller.settings.isLivePhotoEnabled,
-                    isEnabled: controller.capabilities.supportsLivePhoto
+                    isEnabled: true
                 ) {
                     controller.toggleLivePhoto()
                 }
@@ -658,6 +662,7 @@ private struct ToggleChip: View {
         .disabled(!isEnabled)
         .glassCapsule(interactive: true, isActive: isOn)
         .accessibilityLabel(Text(accessibilityLabel))
+        .accessibilityValue(Text(isOn ? "On" : "Off"))
     }
 }
 
