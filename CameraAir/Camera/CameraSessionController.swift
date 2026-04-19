@@ -278,9 +278,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         let allCases: [AspectRatioOption] = {
             switch settings.aspectOrientation {
             case .portrait:
-                return [.portrait34, .portrait916, .classic32, .standard43, .widescreen169]
+                return [.portrait34, .portrait916, .square]
             case .landscape:
-                return [.portrait34, .portrait916, .classic32, .standard43, .widescreen169]
+                return [.standard43, .classic32, .widescreen169, .square]
             case .square:
                 return [.square]
             }

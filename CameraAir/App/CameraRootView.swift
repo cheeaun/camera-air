@@ -361,22 +361,38 @@ private struct AspectRatioControls: View {
                 Text(ratioText)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(isRatioEnabled ? 0.86 : 0.4))
-                    .frame(minWidth: 58, minHeight: 38)
-                    .padding(.horizontal, 10)
+                    .frame(minWidth: 48, minHeight: 38)
+                    .padding(.horizontal, 6)
             }
             .buttonStyle(.plain)
             .disabled(!isRatioEnabled)
             .glassCapsule(interactive: true, isActive: false)
 
             Button(action: onOrientationTap) {
-                Image(systemName: orientation.systemImage)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+                orientationIcon
                     .frame(width: 44, height: 38)
             }
             .buttonStyle(.plain)
             .glassCapsule(interactive: true, isActive: true)
             .accessibilityLabel(Text("Aspect orientation \(orientation.rawValue)"))
+        }
+    }
+
+    @ViewBuilder
+    private var orientationIcon: some View {
+        switch orientation {
+        case .portrait:
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(.white, lineWidth: 1.8)
+                .frame(width: 12, height: 18)
+        case .landscape:
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(.white, lineWidth: 1.8)
+                .frame(width: 18, height: 12)
+        case .square:
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(.white, lineWidth: 1.8)
+                .frame(width: 15, height: 15)
         }
     }
 }
