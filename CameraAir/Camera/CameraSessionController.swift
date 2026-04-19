@@ -464,10 +464,17 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             strongSelf.session.commitConfiguration()
             strongSelf.updatePhotoOutputDimensions()
 
+            guard let maxPhotoDimensions = strongSelf.photoOutput.maxPhotoDimensionsIfSupported,
+                  strongSelf.canCapturePhoto(with: maxPhotoDimensions) else {
+                strongSelf.showTransientError("Photo capture is unavailable for this camera setup.")
+                return
+            }
+
             let format: [String: Any] = [AVVideoCodecKey: AVVideoCodecType.jpeg]
 
             let photoSettings = AVCapturePhotoSettings(format: format)
             photoSettings.photoQualityPrioritization = .speed
+            photoSettings.maxPhotoDimensions = maxPhotoDimensions
 
             let livePhotoURL: URL?
             if strongSelf.photoOutput.isLivePhotoCaptureSupported && strongSelf.photoOutput.isLivePhotoCaptureEnabled && strongSelf.settings.isLivePhotoEnabled {
@@ -615,11 +622,24 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private func updatePhotoOutputDimensions() {
         guard let format = currentVideoInput?.device.activeFormat else { return }
 
-        if let dimensions = format.supportedMaxPhotoDimensions.max(by: { lhs, rhs in
-            lhs.width * lhs.height < rhs.width * rhs.height
-        }) {
+        if let dimensions = Self.preferredPhotoDimensions(for: format) {
             photoOutput.maxPhotoDimensions = dimensions
         }
+    }
+
+    private func canCapturePhoto(with dimensions: CMVideoDimensions) -> Bool {
+        guard let deviceFormat = currentVideoInput?.device.activeFormat else { return false }
+
+        let supportedDimensions = deviceFormat.supportedMaxPhotoDimensions
+        return supportedDimensions.contains(where: { $0.width == dimensions.width && $0.height == dimensions.height })
+            && dimensions.width > 0
+            && dimensions.height > 0
+    }
+
+    private static func preferredPhotoDimensions(for format: AVCaptureDevice.Format) -> CMVideoDimensions? {
+        format.supportedMaxPhotoDimensions.max(by: { lhs, rhs in
+            lhs.width * lhs.height < rhs.width * rhs.height
+        })
     }
 
     private func refreshCapabilities() {
@@ -1085,6 +1105,12 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
         return renderer.image { _ in
             image.draw(at: CGPoint(x: -cropRect.origin.x, y: -cropRect.origin.y))
         }
+    }
+}
+
+private extension AVCapturePhotoOutput {
+    var maxPhotoDimensionsIfSupported: CMVideoDimensions? {
+        maxPhotoDimensions.width > 0 && maxPhotoDimensions.height > 0 ? maxPhotoDimensions : nil
     }
 }
 
