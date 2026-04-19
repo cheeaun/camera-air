@@ -456,10 +456,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
             let photoSettings = AVCapturePhotoSettings(format: format)
             photoSettings.photoQualityPrioritization = .speed
-            if let connection = strongSelf.photoOutput.connection(with: .video),
-               connection.isVideoRotationAngleSupported(strongSelf.settings.aspectOrientation.videoRotationAngle) {
-                connection.videoRotationAngle = strongSelf.settings.aspectOrientation.videoRotationAngle
-            }
 
             let livePhotoURL: URL?
             if strongSelf.photoOutput.isLivePhotoCaptureSupported && strongSelf.photoOutput.isLivePhotoCaptureEnabled && strongSelf.settings.isLivePhotoEnabled {

@@ -274,15 +274,6 @@ enum AspectOrientation: String, CaseIterable, Identifiable, Codable {
             return defaultAspectRatio
         }
     }
-
-    var videoRotationAngle: CGFloat {
-        switch self {
-        case .portrait:
-            return 90
-        case .landscape, .square:
-            return 0
-        }
-    }
 }
 
 enum NightModePreference: String, CaseIterable, Identifiable, Codable {

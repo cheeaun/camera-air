@@ -75,8 +75,7 @@ struct CameraRootView: View {
             }
 
             return CameraPreviewView(
-                session: controller.session,
-                videoRotationAngle: controller.settings.aspectOrientation.videoRotationAngle
+                session: controller.session
             )
                 .frame(width: fitWidth, height: fitHeight)
                 .clipped()
