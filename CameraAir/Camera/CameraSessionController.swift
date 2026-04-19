@@ -515,13 +515,41 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 exceptionReason: &exceptionReason
             )
 
-            if !didStartCapture {
-                strongSelf.photoCaptureProcessor = nil
-                if let exceptionReason {
-                    NSLog("CameraAir photo capture failed to start: %@", exceptionReason)
-                }
-                strongSelf.showTransientError("Photo capture failed to start.")
+            if didStartCapture {
+                return
             }
+
+            // Some hardware/format combinations reject advanced settings in-flight
+            // (for example max dimensions or Live Photo options). Retry once with a
+            // conservative settings object so shutter still works.
+            if let livePhotoURL {
+                try? FileManager.default.removeItem(at: livePhotoURL)
+            }
+            let fallbackSettings = AVCapturePhotoSettings()
+            fallbackSettings.photoQualityPrioritization = .speed
+            var fallbackExceptionReason: NSString?
+            let didStartFallbackCapture = CameraPhotoCaptureSafety.capturePhoto(
+                with: strongSelf.photoOutput,
+                settings: fallbackSettings,
+                delegate: processor,
+                exceptionReason: &fallbackExceptionReason
+            )
+
+            if didStartFallbackCapture {
+                NSLog(
+                    "CameraAir primary photo settings were rejected; fallback capture started. reason=%@",
+                    exceptionReason ?? "unknown"
+                )
+                return
+            }
+
+            strongSelf.photoCaptureProcessor = nil
+            NSLog(
+                "CameraAir photo capture failed to start (primary=%@, fallback=%@)",
+                exceptionReason ?? "unknown",
+                fallbackExceptionReason ?? "unknown"
+            )
+            strongSelf.showTransientError("Photo capture failed to start.")
         }
     }
 
