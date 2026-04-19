@@ -458,10 +458,13 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             // Prevent capturing if a capture is already in progress
             guard strongSelf.photoCaptureProcessor == nil else { return }
 
-            // Temporarily set session preset to photo to ensure proper capture settings
-            strongSelf.session.beginConfiguration()
-            strongSelf.session.sessionPreset = .photo
-            strongSelf.session.commitConfiguration()
+            // Avoid reconfiguring the session on every shutter press; only ensure `.photo`
+            // preset when it may still be `.high` after switching from video mode.
+            if strongSelf.session.sessionPreset != .photo {
+                strongSelf.session.beginConfiguration()
+                strongSelf.session.sessionPreset = .photo
+                strongSelf.session.commitConfiguration()
+            }
             strongSelf.updatePhotoOutputDimensions()
 
             guard let maxPhotoDimensions = strongSelf.photoOutput.maxPhotoDimensionsIfSupported,
@@ -573,7 +576,13 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func applyCaptureSettings() {
-        photoOutput.isLivePhotoCaptureEnabled = photoOutput.isLivePhotoCaptureSupported && settings.isLivePhotoEnabled
+        // Live Photos include sound; Apple requires a microphone input on the session.
+        photoOutput.isLivePhotoCaptureEnabled = Self.shouldEnableLivePhotoCapture(
+            outputSupportsLivePhoto: photoOutput.isLivePhotoCaptureSupported,
+            userWantsLivePhoto: settings.isLivePhotoEnabled,
+            hasAudioInput: currentAudioInput != nil,
+            livePhotoSupportOverride: livePhotoSupportOverride
+        )
 
         guard let device = currentVideoInput?.device else { return }
         do {
@@ -663,7 +672,11 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
         let newCapabilities = CameraCapabilities(
             hasFlash: device?.hasFlash ?? false,
-            supportsLivePhoto: livePhotoSupportOverride ?? photoOutput.isLivePhotoCaptureSupported,
+            supportsLivePhoto: Self.supportsLivePhotoInSession(
+                outputSupportsLivePhoto: photoOutput.isLivePhotoCaptureSupported,
+                hasAudioInput: currentAudioInput != nil,
+                livePhotoSupportOverride: livePhotoSupportOverride
+            ),
             supportsLowLightBoost: device?.isLowLightBoostSupported ?? false,
             supportsExposureLock: device?.isExposureModeSupported(.locked) ?? false,
             supportedZoomLevels: supportedZoomLevels,
@@ -855,6 +868,33 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         } else {
             DispatchQueue.main.async(execute: updates)
         }
+    }
+
+    /// Live Photo capture requires a microphone input on the capture session (see Apple’s
+    /// “Capturing and saving Live Photos”). Enabling the pipeline without audio can cause
+    /// `capturePhoto(with:delegate:)` to throw an `NSException`.
+    private static func shouldEnableLivePhotoCapture(
+        outputSupportsLivePhoto: Bool,
+        userWantsLivePhoto: Bool,
+        hasAudioInput: Bool,
+        livePhotoSupportOverride: Bool?
+    ) -> Bool {
+        guard outputSupportsLivePhoto, userWantsLivePhoto else { return false }
+        if let livePhotoSupportOverride {
+            return livePhotoSupportOverride
+        }
+        return hasAudioInput
+    }
+
+    private static func supportsLivePhotoInSession(
+        outputSupportsLivePhoto: Bool,
+        hasAudioInput: Bool,
+        livePhotoSupportOverride: Bool?
+    ) -> Bool {
+        if let livePhotoSupportOverride {
+            return livePhotoSupportOverride
+        }
+        return outputSupportsLivePhoto && hasAudioInput
     }
 
     private static func requestAccess(for mediaType: AVMediaType) async -> Bool {
