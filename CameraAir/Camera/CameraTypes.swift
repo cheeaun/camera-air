@@ -147,53 +147,27 @@ enum AspectRatioOption: String, CaseIterable, Identifiable, Codable {
     }
 
     func title(for orientation: AspectOrientation) -> String {
-        switch self {
-        case .square:
-            return "1:1"
-        case .portrait34:
-            return orientation == .portrait ? "3:4" : "4:3"
-        case .portrait916, .vertical:
-            return orientation == .portrait ? "9:16" : "16:9"
-        case .classic32, .classic:
-            return orientation == .portrait ? "3:2" : "2:3"
-        case .standard43, .standard:
-            return orientation == .portrait ? "4:3" : "3:4"
-        case .widescreen169, .widescreen:
-            return orientation == .portrait ? "16:9" : "9:16"
-        }
+        title
     }
 
     func cropRatio(for orientation: AspectOrientation) -> CGFloat {
-        switch self {
-        case .portrait34:
-            return orientation == .portrait ? 3.0 / 4.0 : 4.0 / 3.0
-        case .portrait916, .vertical:
-            return orientation == .portrait ? 9.0 / 16.0 : 16.0 / 9.0
-        case .square:
-            return 1.0
-        case .classic32, .classic:
-            return orientation == .portrait ? 3.0 / 2.0 : 2.0 / 3.0
-        case .standard43, .standard:
-            return orientation == .portrait ? 4.0 / 3.0 : 3.0 / 4.0
-        case .widescreen169, .widescreen:
-            return orientation == .portrait ? 16.0 / 9.0 : 9.0 / 16.0
-        }
+        cropRatio
     }
 
-    func flipped(for orientation: AspectOrientation) -> AspectRatioOption {
+    func paired(for orientation: AspectOrientation) -> AspectRatioOption {
         switch orientation {
         case .portrait:
             switch self {
-            case .portrait34, .standard43, .widescreen169:
-                return self
-            case .portrait916:
-                return .widescreen169
-            case .classic32:
-                return .classic32
-            case .square:
-                return .square
+            case .standard43:
+                return .portrait34
+            case .widescreen169:
+                return .portrait916
+            case .portrait34, .portrait916:
+                return normalized
+            case .square, .classic32:
+                return orientation.defaultAspectRatio
             case .standard, .classic, .widescreen, .vertical:
-                return normalized.flipped(for: orientation)
+                return normalized.paired(for: orientation)
             }
         case .landscape:
             switch self {
@@ -201,16 +175,12 @@ enum AspectRatioOption: String, CaseIterable, Identifiable, Codable {
                 return .standard43
             case .portrait916:
                 return .widescreen169
-            case .classic32:
-                return .classic32
-            case .standard43:
-                return .portrait34
-            case .widescreen169:
-                return .portrait916
-            case .square:
-                return .square
+            case .standard43, .widescreen169:
+                return normalized
+            case .square, .classic32:
+                return orientation.defaultAspectRatio
             case .standard, .classic, .widescreen, .vertical:
-                return normalized.flipped(for: orientation)
+                return normalized.paired(for: orientation)
             }
         case .square:
             return .square
