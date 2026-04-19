@@ -290,7 +290,7 @@ struct CameraRootView: View {
             controller.switchLens()
         } label: {
             VStack(spacing: 6) {
-                Image(systemName: "camera.rotate")
+                Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
                     .font(.system(size: 21, weight: .semibold))
                 Text(controller.lens.title)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
