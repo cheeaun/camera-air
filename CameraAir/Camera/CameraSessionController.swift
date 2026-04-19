@@ -278,9 +278,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         let allCases: [AspectRatioOption] = {
             switch settings.aspectOrientation {
             case .portrait:
-                return [.portrait34, .portrait916, .square]
+                return [.portrait34, .portrait916]
             case .landscape:
-                return [.standard43, .classic32, .widescreen169, .square]
+                return [.standard43, .widescreen169]
             case .square:
                 return [.square]
             }
@@ -466,6 +466,11 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
             let photoSettings = AVCapturePhotoSettings(format: format)
             photoSettings.photoQualityPrioritization = .speed
+            if let connection = strongSelf.photoOutput.connection(with: .video),
+               connection.isVideoOrientationSupported,
+               let videoOrientation = strongSelf.currentVideoOrientation() {
+                connection.videoOrientation = videoOrientation
+            }
 
             let livePhotoURL: URL?
             if strongSelf.photoOutput.isLivePhotoCaptureSupported && strongSelf.photoOutput.isLivePhotoCaptureEnabled && strongSelf.settings.isLivePhotoEnabled {
@@ -695,6 +700,25 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private func clampedDisplayZoomFactor(_ factor: CGFloat, capabilities: CameraCapabilities? = nil) -> CGFloat {
         let range = (capabilities ?? self.capabilities).selectableZoomRange
         return min(max(factor, range.lowerBound), range.upperBound)
+    }
+
+    private func currentVideoOrientation() -> AVCaptureVideoOrientation? {
+        let interfaceOrientation = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.interfaceOrientation ?? .portrait
+
+        switch interfaceOrientation {
+        case .portrait:
+            return .portrait
+        case .portraitUpsideDown:
+            return .portraitUpsideDown
+        case .landscapeLeft:
+            return .landscapeRight
+        case .landscapeRight:
+            return .landscapeLeft
+        default:
+            return nil
+        }
     }
 
     private func clampedDeviceZoomFactor(for displayFactor: CGFloat, device: AVCaptureDevice) -> CGFloat {
