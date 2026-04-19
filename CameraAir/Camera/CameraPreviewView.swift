@@ -4,17 +4,18 @@ import UIKit
 
 struct CameraPreviewView: UIViewRepresentable {
     let session: AVCaptureSession
+    let videoRotationAngle: CGFloat
 
     func makeUIView(context: Context) -> PreviewContainerView {
         let view = PreviewContainerView()
         view.previewLayer.session = session
-        view.updateVideoOrientation()
+        view.updateVideoRotationAngle(videoRotationAngle)
         return view
     }
 
     func updateUIView(_ uiView: PreviewContainerView, context: Context) {
         uiView.previewLayer.session = session
-        uiView.updateVideoOrientation()
+        uiView.updateVideoRotationAngle(videoRotationAngle)
     }
 }
 
@@ -37,33 +38,9 @@ final class PreviewContainerView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func updateVideoOrientation() {
-        guard let connection = previewLayer.connection, connection.isVideoOrientationSupported else { return }
-
-        let interfaceOrientation = currentInterfaceOrientation()
-        connection.videoOrientation = interfaceOrientation.videoOrientation ?? .portrait
-    }
-
-    private func currentInterfaceOrientation() -> UIInterfaceOrientation {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.interfaceOrientation ?? .portrait
-    }
-}
-
-private extension UIInterfaceOrientation {
-    var videoOrientation: AVCaptureVideoOrientation? {
-        switch self {
-        case .portrait:
-            return .portrait
-        case .portraitUpsideDown:
-            return .portraitUpsideDown
-        case .landscapeLeft:
-            return .landscapeRight
-        case .landscapeRight:
-            return .landscapeLeft
-        default:
-            return nil
-        }
+    func updateVideoRotationAngle(_ angle: CGFloat) {
+        guard let connection = previewLayer.connection else { return }
+        guard connection.isVideoRotationAngleSupported(angle) else { return }
+        connection.videoRotationAngle = angle
     }
 }

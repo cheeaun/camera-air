@@ -285,7 +285,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 return [.square]
             }
         }()
-        guard let currentIndex = allCases.firstIndex(of: settings.aspectRatio) else { return }
+        let currentAspectRatio = settings.aspectRatio.normalized
+        let currentIndex = allCases.firstIndex(of: currentAspectRatio) ?? 0
         let nextIndex = (currentIndex + 1) % allCases.count
         setAspectRatio(allCases[nextIndex])
     }
@@ -306,10 +307,16 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             self.settings.aspectOrientation = nextOrientation
             if nextOrientation == .square {
                 self.settings.aspectRatio = .square
-            } else if currentOrientation != .square {
-                self.settings.aspectRatio = self.settings.aspectRatio.flipped(for: nextOrientation)
-            } else if self.settings.aspectRatio.isSquare {
-                self.settings.aspectRatio = nextOrientation == .portrait ? .portrait34 : .standard43
+            } else {
+                let availableRatios: [AspectRatioOption] = nextOrientation == .portrait
+                    ? [.portrait34, .portrait916]
+                    : [.standard43, .widescreen169]
+
+                if let currentRatio = availableRatios.first(where: { $0.normalized == self.settings.aspectRatio.normalized }) {
+                    self.settings.aspectRatio = currentRatio
+                } else {
+                    self.settings.aspectRatio = availableRatios.first ?? self.settings.aspectRatio
+                }
             }
         }
         saveSettings()
@@ -467,9 +474,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             let photoSettings = AVCapturePhotoSettings(format: format)
             photoSettings.photoQualityPrioritization = .speed
             if let connection = strongSelf.photoOutput.connection(with: .video),
-               connection.isVideoOrientationSupported,
-               let videoOrientation = strongSelf.currentVideoOrientation() {
-                connection.videoOrientation = videoOrientation
+               connection.isVideoRotationAngleSupported(strongSelf.settings.aspectOrientation.videoRotationAngle) {
+                connection.videoRotationAngle = strongSelf.settings.aspectOrientation.videoRotationAngle
             }
 
             let livePhotoURL: URL?
@@ -700,25 +706,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private func clampedDisplayZoomFactor(_ factor: CGFloat, capabilities: CameraCapabilities? = nil) -> CGFloat {
         let range = (capabilities ?? self.capabilities).selectableZoomRange
         return min(max(factor, range.lowerBound), range.upperBound)
-    }
-
-    private func currentVideoOrientation() -> AVCaptureVideoOrientation? {
-        let interfaceOrientation = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.interfaceOrientation ?? .portrait
-
-        switch interfaceOrientation {
-        case .portrait:
-            return .portrait
-        case .portraitUpsideDown:
-            return .portraitUpsideDown
-        case .landscapeLeft:
-            return .landscapeRight
-        case .landscapeRight:
-            return .landscapeLeft
-        default:
-            return nil
-        }
     }
 
     private func clampedDeviceZoomFactor(for displayFactor: CGFloat, device: AVCaptureDevice) -> CGFloat {
