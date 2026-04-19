@@ -470,9 +470,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 return
             }
 
-            let format: [String: Any] = [AVVideoCodecKey: AVVideoCodecType.jpeg]
-
-            let photoSettings = AVCapturePhotoSettings(format: format)
+            let photoSettings = AVCapturePhotoSettings()
             photoSettings.photoQualityPrioritization = .speed
             photoSettings.maxPhotoDimensions = maxPhotoDimensions
 
@@ -506,7 +504,21 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             )
 
             strongSelf.photoCaptureProcessor = processor
-            strongSelf.photoOutput.capturePhoto(with: photoSettings, delegate: processor)
+            var exceptionReason: NSString?
+            let didStartCapture = CameraPhotoCaptureSafety.capturePhoto(
+                with: strongSelf.photoOutput,
+                settings: photoSettings,
+                delegate: processor,
+                exceptionReason: &exceptionReason
+            )
+
+            if !didStartCapture {
+                strongSelf.photoCaptureProcessor = nil
+                if let exceptionReason {
+                    NSLog("CameraAir photo capture failed to start: %@", exceptionReason)
+                }
+                strongSelf.showTransientError("Photo capture failed to start.")
+            }
         }
     }
 

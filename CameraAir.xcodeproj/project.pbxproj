@@ -15,6 +15,7 @@
 		A00000000000000000000035 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000015 /* CameraPreviewView.swift */; };
 		A00000000000000000000036 /* CameraAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000016 /* CameraAppIntents.swift */; };
 		A00000000000000000000037 /* CameraAirUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000018 /* CameraAirUITests.swift */; };
+		B00000000000000000000003 /* CameraPhotoCaptureSafety.m in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* CameraPhotoCaptureSafety.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +30,9 @@
 		A00000000000000000000017 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A00000000000000000000018 /* CameraAirUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraAirUITests.swift; sourceTree = "<group>"; };
 		A00000000000000000000019 /* CameraAirUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CameraAirUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B00000000000000000000000 /* CameraAir-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CameraAir-Bridging-Header.h"; sourceTree = "<group>"; };
+		B00000000000000000000001 /* CameraPhotoCaptureSafety.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CameraPhotoCaptureSafety.h; sourceTree = "<group>"; };
+		B00000000000000000000002 /* CameraPhotoCaptureSafety.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CameraPhotoCaptureSafety.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,6 +68,7 @@
 				A0000000000000000000000B /* CameraAirUITests */,
 				A00000000000000000000008 /* Resources */,
 				A00000000000000000000017 /* Info.plist */,
+				B00000000000000000000000 /* CameraAir-Bridging-Header.h */,
 			);
 			path = CameraAir;
 			sourceTree = "<group>";
@@ -100,6 +105,8 @@
 				A00000000000000000000013 /* CameraTypes.swift */,
 				A00000000000000000000014 /* CameraSessionController.swift */,
 				A00000000000000000000015 /* CameraPreviewView.swift */,
+				B00000000000000000000001 /* CameraPhotoCaptureSafety.h */,
+				B00000000000000000000002 /* CameraPhotoCaptureSafety.m */,
 			);
 			path = Camera;
 			sourceTree = "<group>";
@@ -228,6 +235,7 @@
 				A00000000000000000000033 /* CameraTypes.swift in Sources */,
 				A00000000000000000000032 /* CameraRootView.swift in Sources */,
 				A00000000000000000000031 /* CameraAirApp.swift in Sources */,
+				B00000000000000000000003 /* CameraPhotoCaptureSafety.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -304,6 +312,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "CameraAir/CameraAir-Bridging-Header.h";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = targeted;
 				SWIFT_VERSION = 6.0;
@@ -334,6 +343,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "CameraAir/CameraAir-Bridging-Header.h";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = targeted;
 				SWIFT_VERSION = 6.0;
