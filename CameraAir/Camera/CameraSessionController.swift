@@ -255,15 +255,25 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     func cycleAspectRatio() {
         guard !settings.aspectOrientation.isSquare else { return }
 
-        let allCases = AspectRatioOption.allCases.filter { !$0.isSquare }
+        let allCases: [AspectRatioOption] = {
+            switch settings.aspectOrientation {
+            case .portrait:
+                return [.portrait34, .portrait916, .classic32, .standard43, .widescreen169]
+            case .landscape:
+                return [.portrait34, .portrait916, .classic32, .standard43, .widescreen169]
+            case .square:
+                return [.square]
+            }
+        }()
         guard let currentIndex = allCases.firstIndex(of: settings.aspectRatio) else { return }
         let nextIndex = (currentIndex + 1) % allCases.count
         setAspectRatio(allCases[nextIndex])
     }
 
     func cycleAspectOrientation() {
+        let currentOrientation = settings.aspectOrientation
         let nextOrientation: AspectOrientation
-        switch settings.aspectOrientation {
+        switch currentOrientation {
         case .portrait:
             nextOrientation = .square
         case .square:
@@ -276,8 +286,10 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             self.settings.aspectOrientation = nextOrientation
             if nextOrientation == .square {
                 self.settings.aspectRatio = .square
+            } else if currentOrientation != .square {
+                self.settings.aspectRatio = self.settings.aspectRatio.flipped(for: nextOrientation)
             } else if self.settings.aspectRatio.isSquare {
-                self.settings.aspectRatio = .portrait34
+                self.settings.aspectRatio = nextOrientation == .portrait ? .portrait34 : .standard43
             }
         }
         saveSettings()

@@ -179,6 +179,43 @@ enum AspectRatioOption: String, CaseIterable, Identifiable, Codable {
             return orientation == .portrait ? 16.0 / 9.0 : 9.0 / 16.0
         }
     }
+
+    func flipped(for orientation: AspectOrientation) -> AspectRatioOption {
+        switch orientation {
+        case .portrait:
+            switch self {
+            case .portrait34, .standard43, .widescreen169:
+                return self
+            case .portrait916:
+                return .widescreen169
+            case .classic32:
+                return .classic32
+            case .square:
+                return .square
+            case .standard, .classic, .widescreen, .vertical:
+                return normalized.flipped(for: orientation)
+            }
+        case .landscape:
+            switch self {
+            case .portrait34:
+                return .standard43
+            case .portrait916:
+                return .widescreen169
+            case .classic32:
+                return .classic32
+            case .standard43:
+                return .portrait34
+            case .widescreen169:
+                return .portrait916
+            case .square:
+                return .square
+            case .standard, .classic, .widescreen, .vertical:
+                return normalized.flipped(for: orientation)
+            }
+        case .square:
+            return .square
+        }
+    }
 }
 
 enum AspectOrientation: String, CaseIterable, Identifiable, Codable {
