@@ -14,6 +14,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     @Published var latestCaptureAsset: PHAsset?
     @Published private(set) var lastCapturedAsset: PHAsset?
     @Published var errorMessage: String?
+    @Published var toastMessage: String?
 
     let session = AVCaptureSession()
 
@@ -150,9 +151,12 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func setMode(_ mode: CaptureMode) {
+        guard self.mode != mode else { return }
         publish {
             self.mode = mode
         }
+        triggerSelectionFeedback()
+        showTransientToast("\(mode.title) mode")
 
         sessionQueue.async { [weak self] in
             guard let strongSelf = self else { return }
@@ -171,9 +175,12 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func setLens(_ lens: CameraLens) {
+        guard self.lens != lens else { return }
         publish {
             self.lens = lens
         }
+        triggerSelectionFeedback()
+        showTransientToast("\(lens.title) camera")
 
         sessionQueue.async { [weak self] in
             guard let strongSelf = self else { return }
@@ -214,42 +221,55 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func setFlash(_ flash: FlashPreference) {
+        guard settings.flash != flash else { return }
         publish {
             self.settings.flash = flash
         }
         saveSettings()
+        triggerSelectionFeedback()
+        showTransientToast("Flash \(flash.title.lowercased())")
     }
 
     func toggleLivePhoto() {
+        let isEnabled = !settings.isLivePhotoEnabled
         publish {
             self.settings.isLivePhotoEnabled.toggle()
         }
         saveSettings()
+        triggerSelectionFeedback()
+        showTransientToast(isEnabled ? "Live Photo on" : "Live Photo off")
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
         }
     }
 
     func toggleExposureLock() {
+        let isLocked = !settings.isExposureLocked
         publish {
             self.settings.isExposureLocked.toggle()
         }
         saveSettings()
+        triggerSelectionFeedback()
+        showTransientToast(isLocked ? "Exposure locked" : "Exposure unlocked")
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
         }
     }
 
     func setAspectRatio(_ aspectRatio: AspectRatioOption) {
+        let normalizedAspectRatio = aspectRatio.normalized
+        guard settings.aspectRatio != normalizedAspectRatio else { return }
         publish {
-            self.settings.aspectRatio = aspectRatio
-            if aspectRatio.isSquare {
+            self.settings.aspectRatio = normalizedAspectRatio
+            if normalizedAspectRatio.isSquare {
                 self.settings.aspectOrientation = .square
             } else if self.settings.aspectOrientation == .square {
                 self.settings.aspectOrientation = .portrait
             }
         }
         saveSettings()
+        triggerSelectionFeedback()
+        showTransientToast("Aspect ratio \(normalizedAspectRatio.title(for: settings.aspectOrientation))")
     }
 
     func cycleAspectRatio() {
@@ -293,13 +313,18 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             }
         }
         saveSettings()
+        triggerSelectionFeedback()
+        showTransientToast("Orientation \(nextOrientation.rawValue)")
     }
 
     func setNightMode(_ nightMode: NightModePreference) {
+        guard settings.nightMode != nightMode else { return }
         publish {
             self.settings.nightMode = nightMode
         }
         saveSettings()
+        triggerSelectionFeedback()
+        showTransientToast("Low Light Boost \(nightMode.title.lowercased())")
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
         }
@@ -424,6 +449,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func capturePhoto() {
+        triggerCaptureFeedback()
         sessionQueue.async { [weak self] in
             guard let strongSelf = self, strongSelf.isConfigured, strongSelf.session.isRunning else { return }
 
@@ -462,6 +488,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                     guard let owner = self else { return }
                     if let asset {
                         owner.updateLastCapturedAsset(asset)
+                        owner.showTransientToast("Photo saved")
                     }
                     owner.publish {
                         owner.photoCaptureProcessor = nil
@@ -475,6 +502,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func startRecording() {
+        triggerCaptureFeedback()
         sessionQueue.async { [weak self] in
             guard let strongSelf = self, strongSelf.isConfigured, !strongSelf.movieOutput.isRecording else { return }
             let outputURL = Self.temporaryFileURL(pathExtension: "mov")
@@ -485,14 +513,17 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 strongSelf.recordingStartTime = Date()
                 strongSelf.startRecordingTimer()
             }
+            strongSelf.showTransientToast("Recording started")
         }
     }
 
     private func stopRecording() {
+        triggerSelectionFeedback()
         sessionQueue.async { [weak self] in
             guard let strongSelf = self, strongSelf.movieOutput.isRecording else { return }
             strongSelf.movieOutput.stopRecording()
         }
+        showTransientToast("Recording stopped")
     }
 
     private func startRecordingIfNeeded() {
@@ -730,6 +761,47 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
     }
 
+    private func showTransientToast(_ message: String) {
+        publish {
+            self.toastMessage = message
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak self] in
+            guard self?.toastMessage == message else { return }
+            self?.toastMessage = nil
+        }
+    }
+
+    private func triggerSelectionFeedback() {
+        triggerHaptic(.selection)
+    }
+
+    private func triggerCaptureFeedback() {
+        triggerHaptic(.impact(.light))
+    }
+
+    private func triggerHaptic(_ feedback: HapticFeedback) {
+        DispatchQueue.main.async {
+            switch feedback {
+            case .selection:
+                let generator = UISelectionFeedbackGenerator()
+                generator.selectionChanged()
+            case .notification(let type):
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(type)
+            case .impact(let style):
+                let generator = UIImpactFeedbackGenerator(style: style)
+                generator.impactOccurred()
+            }
+        }
+    }
+
+    private enum HapticFeedback {
+        case selection
+        case notification(UINotificationFeedbackGenerator.FeedbackType)
+        case impact(UIImpactFeedbackGenerator.FeedbackStyle)
+    }
+
     private func updateThumbnail(_ image: UIImage?) {
         publish {
             self.latestThumbnail = image
@@ -809,6 +881,7 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
                 let thumbnail = try? await Self.makeVideoThumbnail(from: outputFileURL)
                 strongSelf.updateThumbnail(thumbnail)
                 strongSelf.updateLastCapturedAsset(asset)
+                strongSelf.showTransientToast("Video saved")
             } catch {
                 strongSelf.showTransientError("Unable to save the video.")
             }

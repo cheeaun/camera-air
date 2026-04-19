@@ -119,7 +119,7 @@ struct CameraRootView: View {
             }
         }
         .overlay(alignment: .top) {
-            if let message = controller.errorMessage {
+            if let message = controller.errorMessage ?? controller.toastMessage {
                 ToastLabel(message: message)
                     .padding(.top, 84)
                     .transition(.opacity.combined(with: .move(edge: .top)))
