@@ -240,6 +240,41 @@ enum AspectOrientation: String, CaseIterable, Identifiable, Codable {
         self == .square
     }
 
+    var selectableAspectRatios: [AspectRatioOption] {
+        switch self {
+        case .portrait:
+            return [.portrait34, .portrait916]
+        case .landscape:
+            return [.standard43, .widescreen169]
+        case .square:
+            return [.square]
+        }
+    }
+
+    var defaultAspectRatio: AspectRatioOption {
+        selectableAspectRatios.first ?? .portrait34
+    }
+
+    func coercedAspectRatio(_ aspectRatio: AspectRatioOption) -> AspectRatioOption {
+        let normalizedAspectRatio = aspectRatio.normalized
+        if selectableAspectRatios.contains(normalizedAspectRatio) {
+            return normalizedAspectRatio
+        }
+
+        switch (self, normalizedAspectRatio) {
+        case (.portrait, .standard43):
+            return .portrait34
+        case (.portrait, .widescreen169):
+            return .portrait916
+        case (.landscape, .portrait34):
+            return .standard43
+        case (.landscape, .portrait916):
+            return .widescreen169
+        default:
+            return defaultAspectRatio
+        }
+    }
+
     var videoRotationAngle: CGFloat {
         switch self {
         case .portrait:
@@ -334,6 +369,7 @@ struct CameraSettings: Equatable, Codable {
         let rawAspectRatio = (try? container.decode(AspectRatioOption.self, forKey: .aspectRatio)) ?? defaults.aspectRatio
         aspectRatio = rawAspectRatio.normalized
         aspectOrientation = (try? container.decode(AspectOrientation.self, forKey: .aspectOrientation)) ?? defaults.aspectOrientation
+        aspectRatio = aspectOrientation.coercedAspectRatio(aspectRatio)
         nightMode = (try? container.decode(NightModePreference.self, forKey: .nightMode)) ?? defaults.nightMode
         zoomLevel = (try? container.decode(ZoomLevel.self, forKey: .zoomLevel)) ?? defaults.zoomLevel
         customZoomFactor = (try? container.decode(CGFloat.self, forKey: .customZoomFactor)) ?? defaults.customZoomFactor

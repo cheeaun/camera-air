@@ -258,34 +258,29 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     func setAspectRatio(_ aspectRatio: AspectRatioOption) {
         let normalizedAspectRatio = aspectRatio.normalized
-        guard settings.aspectRatio != normalizedAspectRatio else { return }
+        let nextOrientation: AspectOrientation = if normalizedAspectRatio.isSquare {
+            .square
+        } else if settings.aspectOrientation == .square {
+            .portrait
+        } else {
+            settings.aspectOrientation
+        }
+        let nextAspectRatio = nextOrientation.coercedAspectRatio(normalizedAspectRatio)
+        guard settings.aspectRatio != nextAspectRatio || settings.aspectOrientation != nextOrientation else { return }
         publish {
-            self.settings.aspectRatio = normalizedAspectRatio
-            if normalizedAspectRatio.isSquare {
-                self.settings.aspectOrientation = .square
-            } else if self.settings.aspectOrientation == .square {
-                self.settings.aspectOrientation = .portrait
-            }
+            self.settings.aspectRatio = nextAspectRatio
+            self.settings.aspectOrientation = nextOrientation
         }
         saveSettings()
         triggerSelectionFeedback()
-        showTransientToast("Aspect ratio \(normalizedAspectRatio.title(for: settings.aspectOrientation))")
+        showTransientToast("Aspect ratio \(nextAspectRatio.title(for: nextOrientation))")
     }
 
     func cycleAspectRatio() {
         guard !settings.aspectOrientation.isSquare else { return }
 
-        let allCases: [AspectRatioOption] = {
-            switch settings.aspectOrientation {
-            case .portrait:
-                return [.portrait34, .portrait916]
-            case .landscape:
-                return [.standard43, .widescreen169]
-            case .square:
-                return [.square]
-            }
-        }()
-        let currentAspectRatio = settings.aspectRatio.normalized
+        let allCases = settings.aspectOrientation.selectableAspectRatios
+        let currentAspectRatio = settings.aspectOrientation.coercedAspectRatio(settings.aspectRatio)
         let currentIndex = allCases.firstIndex(of: currentAspectRatio) ?? 0
         let nextIndex = (currentIndex + 1) % allCases.count
         setAspectRatio(allCases[nextIndex])
@@ -305,19 +300,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
         publish {
             self.settings.aspectOrientation = nextOrientation
-            if nextOrientation == .square {
-                self.settings.aspectRatio = .square
-            } else {
-                let availableRatios: [AspectRatioOption] = nextOrientation == .portrait
-                    ? [.portrait34, .portrait916]
-                    : [.standard43, .widescreen169]
-
-                if let currentRatio = availableRatios.first(where: { $0.normalized == self.settings.aspectRatio.normalized }) {
-                    self.settings.aspectRatio = currentRatio
-                } else {
-                    self.settings.aspectRatio = availableRatios.first ?? self.settings.aspectRatio
-                }
-            }
+            self.settings.aspectRatio = nextOrientation.coercedAspectRatio(self.settings.aspectRatio)
         }
         saveSettings()
         triggerSelectionFeedback()
