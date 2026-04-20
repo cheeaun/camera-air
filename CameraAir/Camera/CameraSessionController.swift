@@ -600,7 +600,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func startRecording() {
-        triggerHaptic(.notification(.success))
+        triggerCaptureFeedback()
         sessionQueue.async { [weak self] in
             guard let strongSelf = self, strongSelf.isConfigured, !strongSelf.movieOutput.isRecording else { return }
             let outputURL = Self.temporaryFileURL(pathExtension: "mov")
@@ -616,7 +616,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func stopRecording() {
-        triggerHaptic(.notification(.warning))
+        triggerHeavyHaptic()
         sessionQueue.async { [weak self] in
             guard let strongSelf = self, strongSelf.movieOutput.isRecording else { return }
             strongSelf.movieOutput.stopRecording()
@@ -897,8 +897,38 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         triggerHaptic(.selection)
     }
 
+    private var impactGenerator: UIImpactFeedbackGenerator?
+    private var heavyImpactGenerator: UIImpactFeedbackGenerator?
+
+    func prepareCaptureFeedback() {
+        impactGenerator = UIImpactFeedbackGenerator(style: .medium)
+        impactGenerator?.prepare()
+        heavyImpactGenerator = UIImpactFeedbackGenerator(style: .heavy)
+        heavyImpactGenerator?.prepare()
+    }
+
     private func triggerCaptureFeedback() {
-        triggerHaptic(.impact(.medium))
+        DispatchQueue.main.async { [weak self] in
+            guard let generator = self?.impactGenerator else {
+                let fallback = UIImpactFeedbackGenerator(style: .medium)
+                fallback.prepare()
+                fallback.impactOccurred()
+                return
+            }
+            generator.impactOccurred()
+        }
+    }
+
+    private func triggerHeavyHaptic() {
+        DispatchQueue.main.async { [weak self] in
+            guard let generator = self?.heavyImpactGenerator else {
+                let fallback = UIImpactFeedbackGenerator(style: .heavy)
+                fallback.prepare()
+                fallback.impactOccurred()
+                return
+            }
+            generator.impactOccurred()
+        }
     }
 
     private func triggerHaptic(_ feedback: HapticFeedback) {

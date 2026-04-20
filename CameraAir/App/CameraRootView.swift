@@ -326,6 +326,7 @@ struct CameraRootView: View {
     private func handlePhotoSnapTap() {
         guard !controller.isRecording else { return }
         if controller.mode == .photo {
+            controller.prepareCaptureFeedback()
             controller.performPrimaryAction()
         } else {
             controller.setMode(.photo)
@@ -334,6 +335,7 @@ struct CameraRootView: View {
 
     private func handleVideoSnapTap() {
         if controller.mode == .video {
+            controller.prepareCaptureFeedback()
             controller.performPrimaryAction()
         } else if !controller.isRecording {
             controller.setMode(.video)
