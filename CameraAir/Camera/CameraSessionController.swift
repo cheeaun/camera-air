@@ -600,7 +600,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func startRecording() {
-        triggerCaptureFeedback()
+        triggerHaptic(.notification(.success))
         sessionQueue.async { [weak self] in
             guard let strongSelf = self, strongSelf.isConfigured, !strongSelf.movieOutput.isRecording else { return }
             let outputURL = Self.temporaryFileURL(pathExtension: "mov")
@@ -616,7 +616,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func stopRecording() {
-        triggerSelectionFeedback()
+        triggerHaptic(.notification(.warning))
         sessionQueue.async { [weak self] in
             guard let strongSelf = self, strongSelf.movieOutput.isRecording else { return }
             strongSelf.movieOutput.stopRecording()
@@ -898,7 +898,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func triggerCaptureFeedback() {
-        triggerHaptic(.impact(.light))
+        triggerHaptic(.impact(.medium))
     }
 
     private func triggerHaptic(_ feedback: HapticFeedback) {
@@ -906,12 +906,15 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             switch feedback {
             case .selection:
                 let generator = UISelectionFeedbackGenerator()
+                generator.prepare()
                 generator.selectionChanged()
             case .notification(let type):
                 let generator = UINotificationFeedbackGenerator()
+                generator.prepare()
                 generator.notificationOccurred(type)
             case .impact(let style):
                 let generator = UIImpactFeedbackGenerator(style: style)
+                generator.prepare()
                 generator.impactOccurred()
             }
         }
