@@ -108,7 +108,7 @@ struct CameraRootView: View {
     private var chromeOverlay: some View {
         VStack(spacing: 0) {
             topBar
-            Spacer(minLength: 24)
+            Spacer(minLength: 16)
             if isSettingsExpanded {
                 settingsPanel
                     .padding(.horizontal, 18)
@@ -118,7 +118,7 @@ struct CameraRootView: View {
             bottomBar
         }
         .padding(.top, 14)
-        .padding(.bottom, 20)
+        .padding(.bottom, 14)
         .animation(.snappy(duration: 0.28), value: isSettingsExpanded)
         .animation(.snappy(duration: 0.22), value: controller.mode)
         .animation(.snappy(duration: 0.22), value: controller.isRecording)
@@ -229,7 +229,7 @@ struct CameraRootView: View {
     }
 
     private var bottomBar: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 14) {
             statusRow
 
             HStack(alignment: .center, spacing: 16) {
@@ -437,7 +437,7 @@ private struct DualCaptureControl: View {
         let isDisabledInactivePhotoWhileRecording = isRecording && buttonMode == .photo && !isActive
 
         return Button(action: action) {
-            VStack(spacing: 9) {
+            VStack(spacing: 6) {
                 ZStack {
                     if isActive {
                         Circle()
@@ -478,7 +478,7 @@ private struct DualCaptureControl: View {
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
-                .frame(height: isRecording && buttonMode == .video && isActive ? 30 : 16, alignment: .top)
+                .frame(height: isRecording && buttonMode == .video && isActive ? 30 : 12, alignment: .top)
             }
         }
         .buttonStyle(.plain)
