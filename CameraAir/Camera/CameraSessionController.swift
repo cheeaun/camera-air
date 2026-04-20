@@ -17,6 +17,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     @Published private(set) var lastCapturedAsset: PHAsset?
     @Published var errorMessage: String?
     @Published var toastMessage: String?
+    @Published private(set) var focusPoint: CGPoint?
 
     let session = AVCaptureSession()
 
@@ -279,6 +280,52 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         showTransientToast(isLocked ? "Exposure locked" : "Exposure unlocked")
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
+        }
+    }
+
+    func focus(at normalizedPoint: CGPoint) {
+        guard let device = currentVideoInput?.device else { return }
+
+        let doesSupportFocus = device.isFocusPointOfInterestSupported && device.isFocusModeSupported(.autoFocus)
+        let doesSupportExposure = device.isExposurePointOfInterestSupported && !settings.isExposureLocked
+
+        guard doesSupportFocus || doesSupportExposure else {
+            return
+        }
+
+        sessionQueue.async { [weak self] in
+            guard let strongSelf = self else { return }
+
+            do {
+                try device.lockForConfiguration()
+
+                if doesSupportFocus {
+                    device.focusPointOfInterest = normalizedPoint
+                    device.focusMode = .autoFocus
+                }
+
+                if doesSupportExposure {
+                    device.exposurePointOfInterest = normalizedPoint
+                    device.exposureMode = .continuousAutoExposure
+                }
+
+                device.unlockForConfiguration()
+
+                strongSelf.publish {
+                    strongSelf.focusPoint = normalizedPoint
+                }
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak strongSelf] in
+                    guard let strongSelf else { return }
+                    strongSelf.publish {
+                        if strongSelf.focusPoint == normalizedPoint {
+                            strongSelf.focusPoint = nil
+                        }
+                    }
+                }
+            } catch {
+                NSLog("CameraAir focus failed: \(error.localizedDescription)")
+            }
         }
     }
 
