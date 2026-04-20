@@ -4,7 +4,7 @@
 
 ## Rule
 
-Always prefix shell commands with `rtk`.
+Always prefix shell commands with `rtk`, except `xcodebuild`.
 
 Examples:
 
@@ -13,6 +13,7 @@ rtk git status
 rtk cargo test
 rtk npm run build
 rtk pytest -q
+xcodebuild -scheme CameraAir -destination 'platform=iOS Simulator,name=iPhone 13 mini' build
 ```
 
 ## Meta Commands
