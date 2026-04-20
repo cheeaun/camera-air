@@ -160,7 +160,10 @@ struct CameraRootView: View {
 
             ToggleChip(
                 accessibilityLabel: controller.settings.isExposureLocked ? "Exposure locked" : "Exposure",
-                icon: controller.settings.isExposureLocked ? "camera.metering.center.weighted.average" : "camera.aperture",
+                icon: "sun.max.fill",
+                iconView: { isOn in
+                    AnyView(ExposureLockIcon(isLocked: isOn))
+                },
                 isOn: controller.settings.isExposureLocked,
                 isEnabled: controller.capabilities.supportsExposureLock
             ) {
@@ -714,14 +717,24 @@ private struct FlashMenu: View {
 private struct ToggleChip: View {
     let accessibilityLabel: String
     let icon: String
+    var iconView: ((Bool) -> AnyView)?
     let isOn: Bool
     let isEnabled: Bool
     let action: () -> Void
 
+    @ViewBuilder
+    private var iconContent: some View {
+        if let iconView = iconView {
+            iconView(isOn)
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+        }
+    }
+
     var body: some View {
         Button(action: action) {
-            Image(systemName: icon)
-            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            iconContent
             .foregroundStyle(isEnabled ? .white : .white.opacity(0.46))
             .frame(width: 44, height: 38)
         }
@@ -730,6 +743,25 @@ private struct ToggleChip: View {
         .glassCapsule(interactive: true, isActive: isOn)
         .accessibilityLabel(Text(accessibilityLabel))
         .accessibilityValue(Text(isOn ? "On" : "Off"))
+    }
+}
+
+private struct ExposureLockIcon: View {
+    let isLocked: Bool
+
+    var body: some View {
+        ZStack {
+            if isLocked {
+                Image(systemName: "sun.max.fill")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 7, weight: .bold, design: .rounded))
+                    .offset(x: 6, y: 6)
+            } else {
+                Image(systemName: "sun.max.fill")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+            }
+        }
     }
 }
 
