@@ -1,5 +1,6 @@
 import SwiftUI
 import Photos
+import PhotosUI
 import AVKit
 import UIKit
 
@@ -45,6 +46,18 @@ struct CameraRootView: View {
             CaptureViewer(asset: asset) {
                 controller.dismissLatestCapture()
             }
+        }
+        .sheet(isPresented: $controller.isRecentCapturesPresented) {
+            RecentCapturesView(
+                assets: controller.recentCaptureAssets,
+                onSelectAsset: { asset in
+                    controller.dismissRecentCaptures()
+                    controller.openCapture(asset)
+                },
+                onDismiss: {
+                    controller.dismissRecentCaptures()
+                }
+            )
         }
         .onAppear {
             zoomSliderValue = controller.settings.customZoomFactor
@@ -251,7 +264,7 @@ struct CameraRootView: View {
 
     private var thumbnailButton: some View {
         Button {
-            controller.openLatestCapture()
+            controller.openRecentCaptures()
         } label: {
             Group {
                 if let image = controller.latestThumbnail {
@@ -851,6 +864,145 @@ private extension View {
 }
 
 extension PHAsset: @retroactive Identifiable {}
+
+private struct RecentCapturesView: View {
+    let assets: [PHAsset]
+    let onSelectAsset: (PHAsset) -> Void
+    let onDismiss: () -> Void
+
+    @State private var isLibraryPickerPresented = false
+
+    private let gridColumns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
+    ]
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if assets.isEmpty {
+                    ContentUnavailableView(
+                        "No Recent Captures",
+                        systemImage: "photo.on.rectangle.angled",
+                        description: Text("Take a photo or video to see it here.")
+                    )
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: gridColumns, spacing: 8) {
+                            ForEach(assets) { asset in
+                                Button {
+                                    onSelectAsset(asset)
+                                } label: {
+                                    AssetGridThumbnail(asset: asset)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(12)
+                    }
+                    .background(Color.black.opacity(0.0001))
+                }
+            }
+            .navigationTitle("Recent Captures")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Done") {
+                        onDismiss()
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Browse All Photos") {
+                        isLibraryPickerPresented = true
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $isLibraryPickerPresented) {
+            LibraryPickerView { asset in
+                onSelectAsset(asset)
+            }
+        }
+    }
+}
+
+private struct AssetGridThumbnail: View {
+    let asset: PHAsset
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Group {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.08))
+                        .overlay {
+                            ProgressView()
+                                .tint(.white.opacity(0.75))
+                        }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .aspectRatio(1, contentMode: .fit)
+            .clipped()
+
+            if asset.mediaType == .video {
+                Image(systemName: "video.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(6)
+                    .background(.black.opacity(0.55), in: Capsule())
+                    .padding(6)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .task(id: asset.localIdentifier) {
+            image = await PhotoAssetLoader.image(for: asset, targetSize: CGSize(width: 360, height: 360))
+        }
+    }
+}
+
+private struct LibraryPickerView: UIViewControllerRepresentable {
+    let onSelectAsset: (PHAsset) -> Void
+
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var configuration = PHPickerConfiguration(photoLibrary: PHPhotoLibrary.shared())
+        configuration.filter = .any(of: [.images, .videos])
+        configuration.selectionLimit = 1
+        configuration.preferredAssetRepresentationMode = .current
+        let picker = PHPickerViewController(configuration: configuration)
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onSelectAsset: onSelectAsset)
+    }
+
+    final class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        private let onSelectAsset: (PHAsset) -> Void
+
+        init(onSelectAsset: @escaping (PHAsset) -> Void) {
+            self.onSelectAsset = onSelectAsset
+        }
+
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            picker.dismiss(animated: true)
+            guard let identifier = results.first?.assetIdentifier else { return }
+            let fetchedAssets = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
+            guard let asset = fetchedAssets.firstObject else { return }
+            onSelectAsset(asset)
+        }
+    }
+}
 
 private struct CaptureViewer: View {
     let asset: PHAsset

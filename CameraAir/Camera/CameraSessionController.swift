@@ -12,6 +12,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     @Published private(set) var isCameraAccessDenied = false
     @Published private(set) var latestThumbnail: UIImage?
     @Published var latestCaptureAsset: PHAsset?
+    @Published private(set) var recentCaptureAssets: [PHAsset] = []
+    @Published var isRecentCapturesPresented = false
     @Published private(set) var lastCapturedAsset: PHAsset?
     @Published var errorMessage: String?
     @Published var toastMessage: String?
@@ -20,10 +22,17 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     private static let settingsKey = "CameraAir.Settings"
     private static let lastCapturedKey = "CameraAir.LastCaptured"
+    private static let recentCapturedKey = "CameraAir.RecentCaptured"
+    private static let maxRecentCaptureCount = 100
 
     private var lastCapturedLocalIdentifier: String? {
         get { UserDefaults.standard.string(forKey: Self.lastCapturedKey) }
         set { UserDefaults.standard.set(newValue, forKey: Self.lastCapturedKey) }
+    }
+
+    private var recentCapturedLocalIdentifiers: [String] {
+        get { UserDefaults.standard.stringArray(forKey: Self.recentCapturedKey) ?? [] }
+        set { UserDefaults.standard.set(newValue, forKey: Self.recentCapturedKey) }
     }
 
     private let sessionQueue = DispatchQueue(label: "CameraAir.SessionQueue")
@@ -72,14 +81,29 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func loadLastCapturedAsset() {
-        guard let id = lastCapturedLocalIdentifier else { return }
-        let assets = PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil)
-        guard let asset = assets.firstObject else {
+        var identifiers = recentCapturedLocalIdentifiers
+        if identifiers.isEmpty, let legacyIdentifier = lastCapturedLocalIdentifier {
+            identifiers = [legacyIdentifier]
+        }
+        guard identifiers.isEmpty == false else { return }
+
+        let fetchedAssets = PHAsset.fetchAssets(withLocalIdentifiers: identifiers, options: nil)
+        var assetByIdentifier: [String: PHAsset] = [:]
+        fetchedAssets.enumerateObjects { asset, _, _ in
+            assetByIdentifier[asset.localIdentifier] = asset
+        }
+
+        let orderedAssets = identifiers.compactMap { assetByIdentifier[$0] }
+        recentCapturedLocalIdentifiers = orderedAssets.map(\.localIdentifier)
+
+        guard let latestAsset = orderedAssets.first else {
             lastCapturedLocalIdentifier = nil
             return
         }
-        lastCapturedAsset = asset
-        loadThumbnailForAsset(asset)
+
+        lastCapturedAsset = latestAsset
+        recentCaptureAssets = orderedAssets
+        loadThumbnailForAsset(latestAsset)
     }
 
     private func loadThumbnailForAsset(_ asset: PHAsset) {
@@ -377,28 +401,43 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func openLatestCapture() {
+        guard let asset = recentCaptureAssets.first else {
+            showTransientError("No recent captures from this app.")
+            return
+        }
+        openCapture(asset)
+    }
+
+    func openRecentCaptures() {
+        guard recentCaptureAssets.isEmpty == false else {
+            showTransientError("No recent captures from this app.")
+            return
+        }
+        publish {
+            self.isRecentCapturesPresented = true
+        }
+    }
+
+    func dismissRecentCaptures() {
+        publish {
+            self.isRecentCapturesPresented = false
+        }
+    }
+
+    func openCapture(_ asset: PHAsset) {
         guard !isOpeningCapture else { return }
         isOpeningCapture = true
 
         Task { @MainActor [weak self] in
             guard let strongSelf = self else { return }
 
-            guard let asset = strongSelf.lastCapturedAsset else {
-                strongSelf.showTransientError("No recent captures from this app.")
-                strongSelf.isOpeningCapture = false
-                return
-            }
-
-            // Verify the asset is still valid
             guard asset.localIdentifier.count > 0 else {
                 strongSelf.showTransientError("Capture is no longer available.")
                 strongSelf.isOpeningCapture = false
                 return
             }
 
-            strongSelf.publish {
-                strongSelf.latestCaptureAsset = asset
-            }
+            strongSelf.latestCaptureAsset = asset
             strongSelf.isOpeningCapture = false
         }
     }
@@ -891,9 +930,21 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func updateLastCapturedAsset(_ asset: PHAsset) {
+        var identifiers = recentCapturedLocalIdentifiers.filter { $0 != asset.localIdentifier }
+        identifiers.insert(asset.localIdentifier, at: 0)
+        if identifiers.count > Self.maxRecentCaptureCount {
+            identifiers = Array(identifiers.prefix(Self.maxRecentCaptureCount))
+        }
+
+        recentCapturedLocalIdentifiers = identifiers
         lastCapturedLocalIdentifier = asset.localIdentifier
         publish {
             self.lastCapturedAsset = asset
+            self.recentCaptureAssets.removeAll { $0.localIdentifier == asset.localIdentifier }
+            self.recentCaptureAssets.insert(asset, at: 0)
+            if self.recentCaptureAssets.count > Self.maxRecentCaptureCount {
+                self.recentCaptureAssets = Array(self.recentCaptureAssets.prefix(Self.maxRecentCaptureCount))
+            }
         }
     }
 
