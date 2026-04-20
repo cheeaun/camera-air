@@ -485,27 +485,30 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 livePhotoURL = nil
             }
 
-            let processor = PhotoCaptureProcessor(
-                aspectRatio: strongSelf.settings.aspectRatio,
-                livePhotoMovieURL: livePhotoURL,
-                onThumbnailReady: { [weak self] image in
-                    self?.updateThumbnail(image)
-                },
-                onError: { [weak self] message in
-                    self?.showTransientError(message)
-                },
-                onFinish: { [weak self] asset in
-                    guard let owner = self else { return }
-                    if let asset {
-                        owner.updateLastCapturedAsset(asset)
-                        owner.showTransientToast("Photo saved")
+            let makeProcessor = { (movieURL: URL?) -> PhotoCaptureProcessor in
+                PhotoCaptureProcessor(
+                    aspectRatio: strongSelf.settings.aspectRatio,
+                    livePhotoMovieURL: movieURL,
+                    onThumbnailReady: { [weak self] image in
+                        self?.updateThumbnail(image)
+                    },
+                    onError: { [weak self] message in
+                        self?.showTransientError(message)
+                    },
+                    onFinish: { [weak self] asset in
+                        guard let owner = self else { return }
+                        if let asset {
+                            owner.updateLastCapturedAsset(asset)
+                            owner.showTransientToast("Photo saved")
+                        }
+                        owner.publish {
+                            owner.photoCaptureProcessor = nil
+                        }
                     }
-                    owner.publish {
-                        owner.photoCaptureProcessor = nil
-                    }
-                }
-            )
+                )
+            }
 
+            var processor = makeProcessor(livePhotoURL)
             strongSelf.photoCaptureProcessor = processor
             var exceptionReason: NSString?
             let didStartCapture = CameraPhotoCaptureSafety.capturePhoto(
@@ -525,6 +528,10 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             if let livePhotoURL {
                 try? FileManager.default.removeItem(at: livePhotoURL)
             }
+            // Fallback capture is still-only; keep delegate aligned so we do not save with a
+            // deleted/missing Live Photo movie URL.
+            processor = makeProcessor(nil)
+            strongSelf.photoCaptureProcessor = processor
             let fallbackSettings = AVCapturePhotoSettings()
             fallbackSettings.photoQualityPrioritization = .speed
             var fallbackExceptionReason: NSString?
@@ -1129,17 +1136,19 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
 
     private static func savePhotoToLibrary(photoData: Data, livePhotoMovieURL: URL?) async throws -> PHAsset {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PHAsset, Error>) in
-            if let livePhotoMovieURL, !FileManager.default.fileExists(atPath: livePhotoMovieURL.path) {
-                continuation.resume(throwing: NSError(domain: "CameraAir.PhotoSave", code: 3, userInfo: [NSLocalizedDescriptionKey: "Live photo movie file not found"]))
-                return
+            let pairedVideoURL: URL?
+            if let livePhotoMovieURL, FileManager.default.fileExists(atPath: livePhotoMovieURL.path) {
+                pairedVideoURL = livePhotoMovieURL
+            } else {
+                pairedVideoURL = nil
             }
 
             let placeholderBox = PhotoLibraryPlaceholderBox()
             PHPhotoLibrary.shared().performChanges({
                 let creationRequest = PHAssetCreationRequest.forAsset()
                 creationRequest.addResource(with: .photo, data: photoData, options: nil)
-                if let livePhotoMovieURL {
-                    creationRequest.addResource(with: .pairedVideo, fileURL: livePhotoMovieURL, options: nil)
+                if let pairedVideoURL {
+                    creationRequest.addResource(with: .pairedVideo, fileURL: pairedVideoURL, options: nil)
                 }
                 placeholderBox.placeholder = creationRequest.placeholderForCreatedAsset
             }) { success, error in
