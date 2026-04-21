@@ -323,14 +323,13 @@ struct CameraRootView: View {
         .buttonStyle(.plain)
     }
 
+    private let hapticGenerator = UIImpactFeedbackGenerator(style: .rigid)
+
     private func handlePhotoSnapTap() {
         guard !controller.isRecording else { return }
         if controller.mode == .photo {
-            controller.prepareCaptureFeedback()
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 10_000_000)
-                controller.performPrimaryAction()
-            }
+            hapticGenerator.impactOccurred()
+            controller.performPrimaryAction()
         } else {
             controller.setMode(.photo)
         }
@@ -338,11 +337,8 @@ struct CameraRootView: View {
 
     private func handleVideoSnapTap() {
         if controller.mode == .video {
-            controller.prepareCaptureFeedback()
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 10_000_000)
-                controller.performPrimaryAction()
-            }
+            hapticGenerator.impactOccurred()
+            controller.performPrimaryAction()
         } else if !controller.isRecording {
             controller.setMode(.video)
         }
