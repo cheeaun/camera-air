@@ -964,7 +964,7 @@ private struct PreviewLayerContent: View {
             .clipped()
             .position(x: screenSize.width / 2, y: screenSize.height / 2)
             .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
+                SpatialTapGesture()
                     .onEnded { value in
                         let location = value.location
                         let normalizedPoint = CameraRootView.normalizePoint(
