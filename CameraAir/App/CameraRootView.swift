@@ -944,6 +944,32 @@ private struct FocusIndicator: View {
     }
 }
 
+private struct FocusTapOverlay: UIViewRepresentable {
+    let size: CGSize
+    let onTap: (CGPoint) -> Void
+
+    func makeUIView(context: Context) -> TapCaptureView {
+        let view = TapCaptureView()
+        view.onTap = onTap
+        let tapGesture = UITapGestureRecognizer(target: view, action: #selector(TapCaptureView.handleTap(_:)))
+        view.addGestureRecognizer(tapGesture)
+        return view
+    }
+
+    func updateUIView(_ uiView: TapCaptureView, context: Context) {
+        uiView.frame = CGRect(origin: .zero, size: size)
+    }
+
+    class TapCaptureView: UIView {
+        var onTap: ((CGPoint) -> Void)?
+
+        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
+            let location = gesture.location(in: self)
+            onTap?(location)
+        }
+    }
+}
+
 private struct PreviewLayerContent: View {
     let geometry: GeometryProxy
     @ObservedObject var controller: CameraSessionController
@@ -964,24 +990,22 @@ private struct PreviewLayerContent: View {
             .clipped()
             .position(x: screenSize.width / 2, y: screenSize.height / 2)
 
-            Color.red.opacity(0.001)
-                .frame(width: previewSize.width, height: previewSize.height)
-                .onTapGesture { location in
-                    print("TAPPED at: \(location)")
+            FocusTapOverlay(
+                size: previewSize,
+                onTap: { location in
                     let normalizedPoint = CameraRootView.normalizePoint(
                         viewLocation: location,
                         previewOrigin: previewOrigin,
                         previewSize: previewSize
                     )
-                    print("Normalized: \(normalizedPoint)")
                     guard normalizedPoint.x >= 0, normalizedPoint.x <= 1,
                           normalizedPoint.y >= 0, normalizedPoint.y <= 1 else {
-                        print("Out of bounds")
                         return
                     }
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     controller.focus(at: normalizedPoint)
                 }
+            )
 
             if let focusPoint = controller.focusPoint {
                 FocusIndicator(
