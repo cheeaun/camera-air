@@ -326,9 +326,9 @@ struct CameraRootView: View {
     private func handlePhotoSnapTap() {
         guard !controller.isRecording else { return }
         if controller.mode == .photo {
-            let generator = UIImpactFeedbackGenerator()
+            let generator = UISelectionFeedbackGenerator()
             generator.prepare()
-            generator.impactOccurred()
+            generator.selectionChanged()
             controller.performPrimaryAction()
         } else {
             controller.setMode(.photo)
@@ -337,9 +337,9 @@ struct CameraRootView: View {
 
     private func handleVideoSnapTap() {
         if controller.mode == .video {
-            let generator = UIImpactFeedbackGenerator()
+            let generator = UISelectionFeedbackGenerator()
             generator.prepare()
-            generator.impactOccurred()
+            generator.selectionChanged()
             controller.performPrimaryAction()
         } else if !controller.isRecording {
             controller.setMode(.video)
