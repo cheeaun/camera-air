@@ -13,7 +13,7 @@ xcodebuild -scheme CameraAir -destination 'platform=iOS Simulator,name=iPhone 13
 ## Test
 
 ```bash
-xcodebuild test -scheme CameraAir -destination 'platform=iOS Simulator,name=iPhone 13 mini'
+xcodebuild test -scheme CameraAir -destination 'platform=iOS Simulator,name=iPhone 13 mini' test
 ```
 
 ## Architecture
@@ -39,3 +39,7 @@ cameraair://open?mode=video&lens=front
 - `ios-debugger-agent` — Xcode build/run/debug
 
 Use `skill` tool to load any of these skills when working on related tasks.
+
+## Guidelines
+
+- DO NOT auto-commit and push changes. Only commit when explicitly requested by the user.
