@@ -12,6 +12,7 @@ struct CameraRootView: View {
     @State private var isSettingsExpanded = false
     @State private var isThumbnailPressed = false
     @State private var zoomSliderValue: CGFloat = 1.0
+    @State private var hapticTrigger = 0
 
     init(controller: @autoclosure @escaping () -> CameraSessionController = CameraSessionController()) {
         _controller = StateObject(wrappedValue: controller())
@@ -238,6 +239,7 @@ struct CameraRootView: View {
                     mode: controller.mode,
                     isRecording: controller.isRecording,
                     recordingDuration: controller.recordingDuration,
+                    hapticTrigger: hapticTrigger,
                     onPhotoTap: handlePhotoSnapTap,
                     onVideoTap: handleVideoSnapTap
                 )
@@ -326,9 +328,7 @@ struct CameraRootView: View {
     private func handlePhotoSnapTap() {
         guard !controller.isRecording else { return }
         if controller.mode == .photo {
-            let generator = UISelectionFeedbackGenerator()
-            generator.prepare()
-            generator.selectionChanged()
+            hapticTrigger += 1
             controller.performPrimaryAction()
         } else {
             controller.setMode(.photo)
@@ -337,9 +337,7 @@ struct CameraRootView: View {
 
     private func handleVideoSnapTap() {
         if controller.mode == .video {
-            let generator = UISelectionFeedbackGenerator()
-            generator.prepare()
-            generator.selectionChanged()
+            hapticTrigger += 1
             controller.performPrimaryAction()
         } else if !controller.isRecording {
             controller.setMode(.video)
@@ -427,6 +425,7 @@ private struct DualCaptureControl: View {
     let mode: CaptureMode
     let isRecording: Bool
     let recordingDuration: TimeInterval
+    let hapticTrigger: Int
     let onPhotoTap: () -> Void
     let onVideoTap: () -> Void
 
@@ -493,6 +492,7 @@ private struct DualCaptureControl: View {
         .animation(.snappy(duration: 0.24), value: mode)
         .animation(.snappy(duration: 0.2), value: isRecording)
         .accessibilityLabel(Text(buttonMode == .photo ? "Photo" : "Video"))
+        .sensoryFeedback(.selection, trigger: hapticTrigger)
     }
 
     private func fillColor(for buttonMode: CaptureMode, isActive: Bool) -> Color {
