@@ -963,8 +963,18 @@ private struct FocusTapOverlay: UIViewRepresentable {
     class TapCaptureView: UIView {
         var onTap: ((CGPoint) -> Void)?
 
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = true
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
             let location = gesture.location(in: self)
+            print("UIKit tap at: \(location)")
             onTap?(location)
         }
     }
@@ -988,24 +998,14 @@ private struct PreviewLayerContent: View {
             )
             .frame(width: previewSize.width, height: previewSize.height)
             .clipped()
-            .position(x: screenSize.width / 2, y: screenSize.height / 2)
 
-            FocusTapOverlay(
-                size: previewSize,
-                onTap: { location in
-                    let normalizedPoint = CameraRootView.normalizePoint(
-                        viewLocation: location,
-                        previewOrigin: previewOrigin,
-                        previewSize: previewSize
-                    )
-                    guard normalizedPoint.x >= 0, normalizedPoint.x <= 1,
-                          normalizedPoint.y >= 0, normalizedPoint.y <= 1 else {
-                        return
-                    }
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    controller.focus(at: normalizedPoint)
-                }
-            )
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                controller.focus(at: CGPoint(x: 0.5, y: 0.5))
+            } label: {
+                Color.clear
+            }
+            .frame(width: previewSize.width, height: previewSize.height)
 
             if let focusPoint = controller.focusPoint {
                 FocusIndicator(
@@ -1015,7 +1015,7 @@ private struct PreviewLayerContent: View {
                 )
             }
         }
-        .position(x: screenSize.width / 2, y: screenSize.height / 2)
+        .frame(width: previewSize.width, height: previewSize.height)
     }
 
     private static func calculatePreviewLayout(
