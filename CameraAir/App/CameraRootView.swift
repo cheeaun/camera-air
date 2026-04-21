@@ -963,23 +963,25 @@ private struct PreviewLayerContent: View {
             .frame(width: previewSize.width, height: previewSize.height)
             .clipped()
             .position(x: screenSize.width / 2, y: screenSize.height / 2)
-            .simultaneousGesture(
-                SpatialTapGesture()
-                    .onEnded { value in
-                        let location = value.location
-                        let normalizedPoint = CameraRootView.normalizePoint(
-                            viewLocation: location,
-                            previewOrigin: previewOrigin,
-                            previewSize: previewSize
-                        )
-                        guard normalizedPoint.x >= 0, normalizedPoint.x <= 1,
-                              normalizedPoint.y >= 0, normalizedPoint.y <= 1 else {
-                            return
-                        }
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        controller.focus(at: normalizedPoint)
+
+            Color.red.opacity(0.001)
+                .frame(width: previewSize.width, height: previewSize.height)
+                .onTapGesture { location in
+                    print("TAPPED at: \(location)")
+                    let normalizedPoint = CameraRootView.normalizePoint(
+                        viewLocation: location,
+                        previewOrigin: previewOrigin,
+                        previewSize: previewSize
+                    )
+                    print("Normalized: \(normalizedPoint)")
+                    guard normalizedPoint.x >= 0, normalizedPoint.x <= 1,
+                          normalizedPoint.y >= 0, normalizedPoint.y <= 1 else {
+                        print("Out of bounds")
+                        return
                     }
-            )
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    controller.focus(at: normalizedPoint)
+                }
 
             if let focusPoint = controller.focusPoint {
                 FocusIndicator(
