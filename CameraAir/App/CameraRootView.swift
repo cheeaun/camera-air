@@ -327,7 +327,10 @@ struct CameraRootView: View {
         guard !controller.isRecording else { return }
         if controller.mode == .photo {
             controller.prepareCaptureFeedback()
-            controller.performPrimaryAction()
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 10_000_000)
+                controller.performPrimaryAction()
+            }
         } else {
             controller.setMode(.photo)
         }
@@ -336,7 +339,10 @@ struct CameraRootView: View {
     private func handleVideoSnapTap() {
         if controller.mode == .video {
             controller.prepareCaptureFeedback()
-            controller.performPrimaryAction()
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 10_000_000)
+                controller.performPrimaryAction()
+            }
         } else if !controller.isRecording {
             controller.setMode(.video)
         }

@@ -901,33 +901,37 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private var heavyImpactGenerator: UIImpactFeedbackGenerator?
 
     func prepareCaptureFeedback() {
-        impactGenerator = UIImpactFeedbackGenerator(style: .medium)
+        impactGenerator = UIImpactFeedbackGenerator(style: .rigid)
         impactGenerator?.prepare()
-        heavyImpactGenerator = UIImpactFeedbackGenerator(style: .heavy)
+        heavyImpactGenerator = UIImpactFeedbackGenerator(style: .rigid)
         heavyImpactGenerator?.prepare()
     }
 
     private func triggerCaptureFeedback() {
-        DispatchQueue.main.async { [weak self] in
-            guard let generator = self?.impactGenerator else {
-                let fallback = UIImpactFeedbackGenerator(style: .medium)
-                fallback.prepare()
-                fallback.impactOccurred()
-                return
-            }
+        guard Thread.isMainThread else {
+            DispatchQueue.main.sync { triggerCaptureFeedback() }
+            return
+        }
+        if let generator = impactGenerator {
             generator.impactOccurred()
+        } else {
+            let fallback = UIImpactFeedbackGenerator(style: .rigid)
+            fallback.prepare()
+            fallback.impactOccurred()
         }
     }
 
     private func triggerHeavyHaptic() {
-        DispatchQueue.main.async { [weak self] in
-            guard let generator = self?.heavyImpactGenerator else {
-                let fallback = UIImpactFeedbackGenerator(style: .heavy)
-                fallback.prepare()
-                fallback.impactOccurred()
-                return
-            }
+        guard Thread.isMainThread else {
+            DispatchQueue.main.sync { triggerHeavyHaptic() }
+            return
+        }
+        if let generator = heavyImpactGenerator {
             generator.impactOccurred()
+        } else {
+            let fallback = UIImpactFeedbackGenerator(style: .rigid)
+            fallback.prepare()
+            fallback.impactOccurred()
         }
     }
 
