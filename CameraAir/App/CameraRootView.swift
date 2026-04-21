@@ -73,10 +73,26 @@ struct CameraRootView: View {
 
     private var previewLayer: some View {
         GeometryReader { geometry in
-            PreviewLayerContent(
-                geometry: geometry,
-                controller: controller
+            let screenSize = geometry.size
+            let cropRatio = controller.settings.aspectRatio.cropRatio(for: controller.settings.aspectOrientation)
+            let screenAspect = screenSize.width / max(screenSize.height, 1)
+
+            let fitWidth: CGFloat
+            let fitHeight: CGFloat
+            if screenAspect > cropRatio {
+                fitHeight = screenSize.height
+                fitWidth = fitHeight * cropRatio
+            } else {
+                fitWidth = screenSize.width
+                fitHeight = fitWidth / cropRatio
+            }
+
+            return CameraPreviewView(
+                session: controller.session
             )
+                .frame(width: fitWidth, height: fitHeight)
+                .clipped()
+                .position(x: screenSize.width / 2, y: screenSize.height / 2)
         }
         .overlay {
             LinearGradient(
@@ -87,42 +103,6 @@ struct CameraRootView: View {
         }
         .animation(.snappy(duration: 0.28), value: controller.settings.aspectRatio)
         .ignoresSafeArea()
-    }
-
-    private static func calculatePreviewLayout(
-        screenSize: CGSize,
-        aspectRatio: AspectRatioOption,
-        orientation: AspectOrientation
-    ) -> (size: CGSize, origin: CGPoint) {
-        let cropRatio = aspectRatio.cropRatio(for: orientation)
-        let screenAspect = screenSize.width / max(screenSize.height, 1)
-
-        let fitWidth: CGFloat
-        let fitHeight: CGFloat
-        if screenAspect > cropRatio {
-            fitHeight = screenSize.height
-            fitWidth = fitHeight * cropRatio
-        } else {
-            fitWidth = screenSize.width
-            fitHeight = fitWidth / cropRatio
-        }
-
-        let size = CGSize(width: fitWidth, height: fitHeight)
-        let origin = CGPoint(
-            x: (screenSize.width - fitWidth) / 2,
-            y: (screenSize.height - fitHeight) / 2
-        )
-        return (size, origin)
-    }
-
-    fileprivate static func normalizePoint(
-        viewLocation: CGPoint,
-        previewOrigin: CGPoint,
-        previewSize: CGSize
-    ) -> CGPoint {
-        let relativeX = (viewLocation.x - previewOrigin.x) / previewSize.width
-        let relativeY = (viewLocation.y - previewOrigin.y) / previewSize.height
-        return CGPoint(x: relativeX, y: relativeY)
     }
 
     private var chromeOverlay: some View {
@@ -902,146 +882,6 @@ private struct ThumbnailGlassModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .glassEffect(.regular.tint(Color.white.opacity(0.04)).interactive(), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-}
-
-private struct FocusIndicator: View {
-    let point: CGPoint
-    let previewSize: CGSize
-    let previewOrigin: CGPoint
-
-    @State private var phase: CGFloat = 0
-
-    var body: some View {
-        let screenX = previewOrigin.x + (point.x * previewSize.width)
-        let screenY = previewOrigin.y + (point.y * previewSize.height)
-
-        ZStack {
-            Circle()
-                .strokeBorder(.white, lineWidth: 1.8)
-                .frame(width: 80, height: 80)
-                .scaleEffect(phase)
-                .opacity(1 - phase)
-
-            Circle()
-                .strokeBorder(.white.opacity(0.64), lineWidth: 1.2)
-                .frame(width: 56, height: 56)
-                .scaleEffect(phase)
-                .opacity(1 - phase)
-
-            Circle()
-                .fill(.white.opacity(0.18))
-                .frame(width: 28, height: 28)
-                .scaleEffect(phase)
-                .opacity(phase)
-        }
-        .position(x: screenX, y: screenY)
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.6)) {
-                phase = 1
-            }
-        }
-    }
-}
-
-private struct FocusTapOverlay: UIViewRepresentable {
-    let size: CGSize
-    let onTap: (CGPoint) -> Void
-
-    func makeUIView(context: Context) -> TapCaptureView {
-        let view = TapCaptureView()
-        view.onTap = onTap
-        let tapGesture = UITapGestureRecognizer(target: view, action: #selector(TapCaptureView.handleTap(_:)))
-        view.addGestureRecognizer(tapGesture)
-        return view
-    }
-
-    func updateUIView(_ uiView: TapCaptureView, context: Context) {
-        uiView.frame = CGRect(origin: .zero, size: size)
-    }
-
-    class TapCaptureView: UIView {
-        var onTap: ((CGPoint) -> Void)?
-
-        override init(frame: CGRect) {
-            super.init(frame: frame)
-            isUserInteractionEnabled = true
-        }
-
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-
-        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
-            let location = gesture.location(in: self)
-            print("UIKit tap at: \(location)")
-            onTap?(location)
-        }
-    }
-}
-
-private struct PreviewLayerContent: View {
-    let geometry: GeometryProxy
-    @ObservedObject var controller: CameraSessionController
-
-    var body: some View {
-        let screenSize = geometry.size
-        let (previewSize, previewOrigin) = Self.calculatePreviewLayout(
-            screenSize: screenSize,
-            aspectRatio: controller.settings.aspectRatio,
-            orientation: controller.settings.aspectOrientation
-        )
-
-        ZStack {
-            CameraPreviewView(
-                session: controller.session
-            )
-            .frame(width: previewSize.width, height: previewSize.height)
-            .clipped()
-
-            Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                controller.focus(at: CGPoint(x: 0.5, y: 0.5))
-            } label: {
-                Color.clear
-            }
-            .frame(width: previewSize.width, height: previewSize.height)
-
-            if let focusPoint = controller.focusPoint {
-                FocusIndicator(
-                    point: focusPoint,
-                    previewSize: previewSize,
-                    previewOrigin: previewOrigin
-                )
-            }
-        }
-        .frame(width: previewSize.width, height: previewSize.height)
-    }
-
-    private static func calculatePreviewLayout(
-        screenSize: CGSize,
-        aspectRatio: AspectRatioOption,
-        orientation: AspectOrientation
-    ) -> (size: CGSize, origin: CGPoint) {
-        let cropRatio = aspectRatio.cropRatio(for: orientation)
-        let screenAspect = screenSize.width / max(screenSize.height, 1)
-
-        let fitWidth: CGFloat
-        let fitHeight: CGFloat
-        if screenAspect > cropRatio {
-            fitHeight = screenSize.height
-            fitWidth = fitHeight * cropRatio
-        } else {
-            fitWidth = screenSize.width
-            fitHeight = fitWidth / cropRatio
-        }
-
-        let size = CGSize(width: fitWidth, height: fitHeight)
-        let origin = CGPoint(
-            x: (screenSize.width - fitWidth) / 2,
-            y: (screenSize.height - fitHeight) / 2
-        )
-        return (size, origin)
     }
 }
 
