@@ -629,16 +629,22 @@ private struct ZoomFactorSlider: View {
 
         let clampedX = min(max(locationX, 0), width)
         let progress = clampedX / width
-        return range.lowerBound + (range.upperBound - range.lowerBound) * progress
+        let logLower = log(range.lowerBound)
+        let logUpper = log(range.upperBound)
+        let logValue = logLower + (logUpper - logLower) * progress
+        return exp(logValue)
     }
 
     private func labelX(for factor: CGFloat, in width: CGFloat) -> CGFloat {
         guard width > 0 else { return 0 }
 
-        let span = range.upperBound - range.lowerBound
-        guard span > 0 else { return width / 2 }
+        let logLower = log(range.lowerBound)
+        let logUpper = log(range.upperBound)
+        let logRange = logUpper - logLower
+        guard logRange > 0 else { return width / 2 }
 
-        let progress = min(max((factor - range.lowerBound) / span, 0), 1)
+        let logFactor = log(factor)
+        let progress = min(max((logFactor - logLower) / logRange, 0), 1)
         return progress * width
     }
 
