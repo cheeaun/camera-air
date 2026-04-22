@@ -522,96 +522,129 @@ private struct ZoomFactorSlider: View {
     let onEditingChanged: (Bool) -> Void
     @State private var isDragging = false
 
+    private let presetFactors: [CGFloat] = [0.5, 1.0, 10.0]
+    private let tickCount = 40
+
     var body: some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            HStack(spacing: 10) {
-                Text(value.cameraZoomLabel)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(width: 38, alignment: .trailing)
+        VStack(spacing: 12) {
+            ticksAndTrack
 
-                GeometryReader { geometry in
-                    let trackWidth = geometry.size.width
-                    let thumbX = labelX(for: value, in: trackWidth)
+            triangleIndicator
 
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(.white.opacity(0.3))
-                            .frame(height: 4)
-
-                        Capsule()
-                            .fill(.white)
-                            .frame(width: max(0, thumbX), height: 4)
-
-                        Circle()
-                            .fill(.white)
-                            .frame(width: 22, height: 22)
-                            .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
-                            .scaleEffect(isDragging ? 1.15 : 1.0)
-                            .animation(.easeInOut(duration: 0.15), value: isDragging)
-                            .offset(x: thumbX - 11)
-                    }
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { gesture in
-                                if !isDragging {
-                                    isDragging = true
-                                    onEditingChanged(true)
-                                }
-
-                                let rawFactor = factor(for: gesture.location.x, in: trackWidth)
-                                value = stepRoundedFactor(from: rawFactor)
-                            }
-                            .onEnded { _ in
-                                value = nearestFactor(to: value)
-                                isDragging = false
-                                onEditingChanged(false)
-                            }
-                    )
-                }
-                .frame(height: 28)
-            }
-
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    let laidOutLabels = laidOutZoomLabels(in: geometry.size.width)
-                    ForEach(Array(laidOutLabels.enumerated()), id: \.offset) { _, label in
-                        Text(label.text)
-                            .font(.system(size: 10, weight: .medium, design: .rounded))
-                            .foregroundStyle(abs(label.factor - value) < 0.05 ? .white : .white.opacity(0.55))
-                            .frame(width: label.width, alignment: .center)
-                            .position(x: label.centerX, y: 8)
-                    }
-                }
-            }
-            .frame(height: 16)
+            presetButtons
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .glassCapsule(interactive: true)
     }
 
+    private var ticksAndTrack: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let trackY: CGFloat = 16
+
+            ZStack(alignment: .top) {
+                ForEach(0..<tickCount, id: \.self) { index in
+                    let factor = factorForTick(index: index, total: tickCount)
+                    let x = labelX(for: factor, in: width)
+                    let isMajor = index % 10 == 0
+
+                    Rectangle()
+                        .fill(.white.opacity(isMajor ? 0.5 : 0.25))
+                        .frame(width: 1, height: isMajor ? 6 : 4)
+                        .position(x: x, y: trackY - (isMajor ? 3 : 2))
+                }
+
+                LinearGradient(
+                    colors: [Color(white: 0.25), Color(white: 0.0)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 4)
+                .mask(
+                    Capsule()
+                        .frame(height: 4)
+                )
+                .offset(y: trackY)
+
+                let progressX = labelX(for: value, in: width)
+                Capsule()
+                    .fill(.white)
+                    .frame(width: max(0, progressX), height: 4)
+                    .offset(y: trackY)
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { gesture in
+                        if !isDragging {
+                            isDragging = true
+                            onEditingChanged(true)
+                        }
+                        let rawFactor = factor(for: gesture.location.x, in: width)
+                        value = clamp(rawFactor, range: range)
+                    }
+                    .onEnded { _ in
+                        snapToNearestPreset()
+                        isDragging = false
+                        onEditingChanged(false)
+                    }
+            )
+        }
+        .frame(height: 20)
+    }
+
+    private var triangleIndicator: some View {
+        GeometryReader { geometry in
+            let indicatorX = labelX(for: value, in: geometry.size.width)
+            Triangle()
+                .fill(Color(red: 1.0, green: 0.85, blue: 0.0))
+                .frame(width: 10, height: 8)
+                .offset(x: indicatorX - 5, y: -2)
+        }
+        .frame(height: 10)
+    }
+
+    private var presetButtons: some View {
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                ForEach(presetFactors, id: \.self) { factor in
+                    let isActive = abs(factor - value) < 0.1
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            value = factor
+                            onEditingChanged(true)
+                            onEditingChanged(false)
+                        }
+                    } label: {
+                        Text(factor == 10 ? "10" : (factor == 1 ? "1" : "0.5"))
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .foregroundStyle(isActive ? .black : .white)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle()
+                                    .fill(isActive ? Color(red: 1.0, green: 0.85, blue: 0.0) : .clear)
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(.white.opacity(0.4), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: geometry.size.width / 3)
+                }
+            }
+        }
+        .frame(height: 28)
+    }
+
     private var range: ClosedRange<CGFloat> {
-        let sorted = supportedFactors.sorted()
-        let lowerBound = sorted.first ?? 1.0
-        let upperBound = sorted.last ?? lowerBound
-        return lowerBound...max(upperBound, lowerBound)
-    }
-
-    private func nearestFactor(to value: CGFloat) -> CGFloat {
-        supportedFactors.min(by: { abs($0 - value) < abs($1 - value) }) ?? value
-    }
-
-    private func stepRoundedFactor(from value: CGFloat) -> CGFloat {
-        let step: CGFloat = 0.05
-        let quantized = (value / step).rounded() * step
-        return min(max(quantized, range.lowerBound), range.upperBound)
+        0.5...10.0
     }
 
     private func factor(for locationX: CGFloat, in width: CGFloat) -> CGFloat {
         guard width > 0 else { return value }
-
         let clampedX = min(max(locationX, 0), width)
         let progress = clampedX / width
         let logLower = log(range.lowerBound)
@@ -622,58 +655,42 @@ private struct ZoomFactorSlider: View {
 
     private func labelX(for factor: CGFloat, in width: CGFloat) -> CGFloat {
         guard width > 0 else { return 0 }
-
         let logLower = log(range.lowerBound)
         let logUpper = log(range.upperBound)
         let logRange = logUpper - logLower
         guard logRange > 0 else { return width / 2 }
-
         let logFactor = log(factor)
         let progress = min(max((logFactor - logLower) / logRange, 0), 1)
         return progress * width
     }
 
-    private struct ZoomLabelLayout {
-        let factor: CGFloat
-        let text: String
-        let width: CGFloat
-        let centerX: CGFloat
+    private func factorForTick(index: Int, total: Int) -> CGFloat {
+        let progress = CGFloat(index) / CGFloat(total - 1)
+        let logLower = log(range.lowerBound)
+        let logUpper = log(range.upperBound)
+        let logValue = logLower + (logUpper - logLower) * progress
+        return exp(logValue)
     }
 
-    private func laidOutZoomLabels(in width: CGFloat) -> [ZoomLabelLayout] {
-        guard width > 0 else { return [] }
+    private func clamp(_ value: CGFloat, range: ClosedRange<CGFloat>) -> CGFloat {
+        min(max(value, range.lowerBound), range.upperBound)
+    }
 
-        let fontCharacterWidth: CGFloat = 5.4
-        let minGap: CGFloat = 6
-        let maxLabels = supportedFactors.sorted().map { factor -> (factor: CGFloat, text: String, width: CGFloat, targetX: CGFloat) in
-            let text = factor.cameraZoomLabel
-            let labelWidth = max(18, CGFloat(text.count) * fontCharacterWidth)
-            return (factor, text, labelWidth, labelX(for: factor, in: width))
+    private func snapToNearestPreset() {
+        if let closest = presetFactors.min(by: { abs($0 - value) < abs($1 - value) }) {
+            value = closest
         }
+    }
+}
 
-        var laidOut: [ZoomLabelLayout] = []
-        var previousRightEdge: CGFloat = -CGFloat.greatestFiniteMagnitude
-
-        for label in maxLabels {
-            let halfWidth = label.width / 2
-            var centerX = min(max(label.targetX, halfWidth), width - halfWidth)
-            if centerX - halfWidth < previousRightEdge + minGap {
-                centerX = previousRightEdge + minGap + halfWidth
-            }
-            centerX = min(centerX, width - halfWidth)
-            previousRightEdge = centerX + halfWidth
-
-            laidOut.append(
-                ZoomLabelLayout(
-                    factor: label.factor,
-                    text: label.text,
-                    width: label.width,
-                    centerX: centerX
-                )
-            )
-        }
-
-        return laidOut
+private struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.closeSubpath()
+        return path
     }
 }
 
