@@ -548,9 +548,8 @@ private struct ZoomFactorSlider: View {
 
             ZStack(alignment: .top) {
                 ForEach(0..<tickCount, id: \.self) { index in
-                    let factor = factorForTick(index: index, total: tickCount)
-                    let x = labelX(for: factor, in: width)
-                    let isMajor = index == 0 || index == tickCount - 1 || index == tickCount / 2
+                    let x = tickPosition(for: index, total: tickCount, in: width)
+                    let isMajor = isTickMajor(index: index, total: tickCount)
 
                     Rectangle()
                         .fill(.white.opacity(isMajor ? 0.5 : 0.25))
@@ -585,7 +584,9 @@ private struct ZoomFactorSlider: View {
 
     private var triangleIndicator: some View {
         GeometryReader { geometry in
-            let indicatorX = labelX(for: value, in: geometry.size.width)
+            let width = geometry.size.width
+            let indicatorIndex = tickIndex(for: value, total: tickCount)
+            let indicatorX = tickPosition(for: Int(indicatorIndex.rounded()), total: tickCount, in: width)
             Triangle()
                 .fill(Color(red: 1.0, green: 0.85, blue: 0.0))
                 .frame(width: 10, height: 8)
@@ -601,7 +602,8 @@ private struct ZoomFactorSlider: View {
             HStack(spacing: 0) {
                 ForEach(presetFactors, id: \.self) { factor in
                     let isActive = abs(factor - value) < 0.1
-                    let position = labelX(for: factor, in: width)
+                    let buttonIndex = tickIndex(for: factor, total: tickCount)
+                    let position = tickPosition(for: Int(buttonIndex.rounded()), total: tickCount, in: width)
 
                     Button {
                         hapticGenerator.selectionChanged()
@@ -637,10 +639,10 @@ private struct ZoomFactorSlider: View {
     private func factor(for locationX: CGFloat, in width: CGFloat) -> CGFloat {
         guard width > 0 else { return value }
         let clampedX = min(max(locationX, 0), width)
-        let progress = clampedX / width
         let logLower = log(range.lowerBound)
         let logUpper = log(range.upperBound)
-        let logValue = logLower + (logUpper - logLower) * progress
+        let logProgress = clampedX / width
+        let logValue = logLower + (logUpper - logLower) * logProgress
         return exp(logValue)
     }
 
@@ -658,10 +660,31 @@ private struct ZoomFactorSlider: View {
     private func factorForTick(index: Int, total: Int) -> CGFloat {
         let logLower = log(range.lowerBound)
         let logUpper = log(range.upperBound)
-        let normalizedIndex = CGFloat(index) / CGFloat(total - 1)
-        let logProgress = 1 - pow(1 - normalizedIndex, 2)
-        let logValue = logLower + (logUpper - logLower) * logProgress
-        return exp(logValue)
+        let logProgress = pow(CGFloat(index) / CGFloat(total - 1), 2.0)
+        let logFactor = logLower + (logUpper - logLower) * logProgress
+        return exp(logFactor)
+    }
+
+    private func tickIndex(for factor: CGFloat, total: Int) -> CGFloat {
+        let logLower = log(range.lowerBound)
+        let logUpper = log(range.upperBound)
+        let logFactor = log(factor)
+        let logProgress = (logFactor - logLower) / (logUpper - logLower)
+        return pow(logProgress, 0.5) * CGFloat(total - 1)
+    }
+
+    private func tickPosition(for index: Int, total: Int, in width: CGFloat) -> CGFloat {
+        let progress = CGFloat(index) / CGFloat(total - 1)
+        return progress * width
+    }
+
+    private func isTickMajor(index: Int, total: Int) -> Bool {
+        let logLower = log(range.lowerBound)
+        let logUpper = log(range.upperBound)
+        let logProgress = pow(CGFloat(index) / CGFloat(total - 1), 2.0)
+        let logFactor = logLower + (logUpper - logLower) * logProgress
+        let factor = exp(logFactor)
+        return abs(factor - 1.0) < 0.15 || index == 0 || index == total - 1
     }
 
     private func clamp(_ value: CGFloat, range: ClosedRange<CGFloat>) -> CGFloat {
