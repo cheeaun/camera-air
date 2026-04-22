@@ -551,15 +551,6 @@ private struct ZoomFactorSlider: View {
                         .frame(width: 1, height: isMajor ? 6 : 4)
                         .position(x: x, y: trackY - (isMajor ? 3 : 2))
                 }
-
-                LinearGradient(
-                    colors: [Color(white: 0.25), Color(white: 0.0)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 4)
-                .mask(Capsule().frame(height: 4))
-                .offset(y: trackY)
             }
             .contentShape(Rectangle())
             .gesture(
@@ -587,7 +578,7 @@ private struct ZoomFactorSlider: View {
             Triangle()
                 .fill(Color(red: 1.0, green: 0.85, blue: 0.0))
                 .frame(width: 10, height: 8)
-                .offset(x: indicatorX - 5, y: -2)
+                .offset(x: indicatorX - 5, y: 0)
         }
         .frame(height: 10)
     }
@@ -595,7 +586,7 @@ private struct ZoomFactorSlider: View {
     private var presetButtons: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
-            HStack(spacing: 0) {
+            ZStack(alignment: .top) {
                 ForEach(presetFactors, id: \.self) { factor in
                     let isActive = abs(factor - value) < 0.1
                     let buttonX = labelX(for: factor, in: width)
@@ -675,9 +666,9 @@ private struct ZoomFactorSlider: View {
 private struct Triangle: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         path.closeSubpath()
         return path
     }
