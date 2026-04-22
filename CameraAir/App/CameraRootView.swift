@@ -526,19 +526,16 @@ private struct ZoomFactorSlider: View {
     private let tickCount = 40
 
     var body: some View {
-        VStack(spacing: 12) {
-            ticksAndTrack
-
+        VStack(spacing: 8) {
+            trackWithTicks
             triangleIndicator
-
             presetButtons
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .glassCapsule(interactive: true)
     }
 
-    private var ticksAndTrack: some View {
+    private var trackWithTicks: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
             let trackY: CGFloat = 16
@@ -547,7 +544,7 @@ private struct ZoomFactorSlider: View {
                 ForEach(0..<tickCount, id: \.self) { index in
                     let factor = factorForTick(index: index, total: tickCount)
                     let x = labelX(for: factor, in: width)
-                    let isMajor = index % 10 == 0
+                    let isMajor = index == 0 || index == tickCount - 1 || index == tickCount / 2
 
                     Rectangle()
                         .fill(.white.opacity(isMajor ? 0.5 : 0.25))
@@ -561,17 +558,8 @@ private struct ZoomFactorSlider: View {
                     endPoint: .bottom
                 )
                 .frame(height: 4)
-                .mask(
-                    Capsule()
-                        .frame(height: 4)
-                )
+                .mask(Capsule().frame(height: 4))
                 .offset(y: trackY)
-
-                let progressX = labelX(for: value, in: width)
-                Capsule()
-                    .fill(.white)
-                    .frame(width: max(0, progressX), height: 4)
-                    .offset(y: trackY)
             }
             .contentShape(Rectangle())
             .gesture(
@@ -585,7 +573,6 @@ private struct ZoomFactorSlider: View {
                         value = clamp(rawFactor, range: range)
                     }
                     .onEnded { _ in
-                        snapToNearestPreset()
                         isDragging = false
                         onEditingChanged(false)
                     }
@@ -607,9 +594,11 @@ private struct ZoomFactorSlider: View {
 
     private var presetButtons: some View {
         GeometryReader { geometry in
+            let width = geometry.size.width
             HStack(spacing: 0) {
                 ForEach(presetFactors, id: \.self) { factor in
                     let isActive = abs(factor - value) < 0.1
+                    let buttonX = labelX(for: factor, in: width)
 
                     Button {
                         withAnimation(.easeInOut(duration: 0.15)) {
@@ -632,7 +621,7 @@ private struct ZoomFactorSlider: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .frame(width: geometry.size.width / 3)
+                    .position(x: buttonX, y: 14)
                 }
             }
         }
@@ -665,10 +654,10 @@ private struct ZoomFactorSlider: View {
     }
 
     private func factorForTick(index: Int, total: Int) -> CGFloat {
-        let progress = CGFloat(index) / CGFloat(total - 1)
         let logLower = log(range.lowerBound)
         let logUpper = log(range.upperBound)
-        let logValue = logLower + (logUpper - logLower) * progress
+        let logProgress = pow(CGFloat(index) / CGFloat(total - 1), 2.0)
+        let logValue = logLower + (logUpper - logLower) * logProgress
         return exp(logValue)
     }
 
