@@ -521,6 +521,8 @@ private struct ZoomFactorSlider: View {
     let supportedFactors: [CGFloat]
     let onEditingChanged: (Bool) -> Void
     @State private var isDragging = false
+    @State private var lastHapticZoom: CGFloat = 0
+    private let hapticGenerator = UISelectionFeedbackGenerator()
 
     private let presetFactors: [CGFloat] = [0.5, 1.0, 10.0]
     private let tickCount = 40
@@ -531,8 +533,12 @@ private struct ZoomFactorSlider: View {
             triangleIndicator
             presetButtons
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .onAppear {
+            hapticGenerator.prepare()
+        }
     }
 
     private var trackWithTicks: some View {
@@ -562,9 +568,14 @@ private struct ZoomFactorSlider: View {
                         }
                         let rawFactor = factor(for: gesture.location.x, in: width)
                         value = clamp(rawFactor, range: range)
+
+                        if shouldTriggerHaptic(for: rawFactor) {
+                            triggerHaptic(intensity: hapticIntensity(for: rawFactor))
+                        }
                     }
                     .onEnded { _ in
                         isDragging = false
+                        lastHapticZoom = 0
                         onEditingChanged(false)
                     }
             )
@@ -586,12 +597,15 @@ private struct ZoomFactorSlider: View {
     private var presetButtons: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
-            ZStack(alignment: .top) {
+
+            HStack(spacing: 0) {
                 ForEach(presetFactors, id: \.self) { factor in
                     let isActive = abs(factor - value) < 0.1
-                    let buttonX = labelX(for: factor, in: width)
+                    let position = labelX(for: factor, in: width)
 
                     Button {
+                        hapticGenerator.selectionChanged()
+                        hapticGenerator.prepare()
                         withAnimation(.easeInOut(duration: 0.15)) {
                             value = factor
                             onEditingChanged(true)
@@ -604,17 +618,14 @@ private struct ZoomFactorSlider: View {
                             .frame(width: 28, height: 28)
                             .background(
                                 Circle()
-                                    .fill(isActive ? Color(red: 1.0, green: 0.85, blue: 0.0) : .clear)
-                            )
-                            .overlay(
-                                Circle()
-                                    .stroke(.white.opacity(0.4), lineWidth: 1)
+                                    .fill(isActive ? Color(red: 1.0, green: 0.85, blue: 0.0) : Color.white.opacity(0.2))
                             )
                     }
                     .buttonStyle(.plain)
-                    .position(x: buttonX, y: 14)
+                    .position(x: position, y: 14)
                 }
             }
+            .frame(width: width)
         }
         .frame(height: 28)
     }
@@ -647,7 +658,8 @@ private struct ZoomFactorSlider: View {
     private func factorForTick(index: Int, total: Int) -> CGFloat {
         let logLower = log(range.lowerBound)
         let logUpper = log(range.upperBound)
-        let logProgress = pow(CGFloat(index) / CGFloat(total - 1), 2.0)
+        let normalizedIndex = CGFloat(index) / CGFloat(total - 1)
+        let logProgress = 1 - pow(1 - normalizedIndex, 2)
         let logValue = logLower + (logUpper - logLower) * logProgress
         return exp(logValue)
     }
@@ -656,10 +668,23 @@ private struct ZoomFactorSlider: View {
         min(max(value, range.lowerBound), range.upperBound)
     }
 
-    private func snapToNearestPreset() {
-        if let closest = presetFactors.min(by: { abs($0 - value) < abs($1 - value) }) {
-            value = closest
-        }
+    private func shouldTriggerHaptic(for zoom: CGFloat) -> Bool {
+        let intensity = hapticIntensity(for: zoom)
+        let threshold = max(0.3, 1.0 - intensity * 0.7)
+        return abs(zoom - lastHapticZoom) > threshold
+    }
+
+    private func hapticIntensity(for zoom: CGFloat) -> CGFloat {
+        let logZoom = log(zoom)
+        let logLower = log(range.lowerBound)
+        let logUpper = log(range.upperBound)
+        return (logZoom - logLower) / (logUpper - logLower)
+    }
+
+    private func triggerHaptic(intensity: CGFloat) {
+        let generator = UIImpactFeedbackGenerator(style: intensity > 0.7 ? .medium : .light)
+        generator.impactOccurred(intensity: max(0.3, min(1.0, intensity)))
+        lastHapticZoom = value
     }
 }
 
