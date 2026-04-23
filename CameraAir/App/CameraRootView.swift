@@ -515,27 +515,6 @@ private struct DualCaptureControl: View {
     }
 }
 
-@MainActor
-private class SliderHaptics: ObservableObject {
-    let selectionGenerator = UISelectionFeedbackGenerator()
-    let impactGenerator = UIImpactFeedbackGenerator(style: .light)
-
-    func prepare() {
-        selectionGenerator.prepare()
-        impactGenerator.prepare()
-    }
-
-    func selectionChanged() {
-        selectionGenerator.selectionChanged()
-        selectionGenerator.prepare()
-    }
-
-    func impactOccurred() {
-        impactGenerator.impactOccurred()
-        impactGenerator.prepare()
-    }
-}
-
 private struct ZoomFactorSlider: View {
     @Binding var value: CGFloat
 
@@ -544,7 +523,6 @@ private struct ZoomFactorSlider: View {
     @State private var isDragging = false
     @State private var lastHapticZoom: CGFloat = 0
     @State private var dragX: CGFloat = 0
-    @StateObject private var haptics = SliderHaptics()
 
     private let presetFactors: [CGFloat] = [0.5, 1.0, 10.0]
     private let tickCount = 40
@@ -558,9 +536,6 @@ private struct ZoomFactorSlider: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
-        .onAppear {
-            haptics.prepare()
-        }
     }
 
     private var trackWithTicks: some View {
@@ -600,8 +575,10 @@ private struct ZoomFactorSlider: View {
                         value = clamp(rawFactor, range: range)
 
                         if shouldTriggerHaptic(for: rawFactor) {
-                            haptics.impactOccurred()
                             lastHapticZoom = rawFactor
+                            DispatchQueue.main.async {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            }
                         }
                     }
                     .onEnded { _ in
@@ -641,7 +618,10 @@ private struct ZoomFactorSlider: View {
                     let position = labelX(for: factor, in: width)
 
                     Button {
-                        haptics.selectionChanged()
+                        DispatchQueue.main.async {
+                            let generator = UISelectionFeedbackGenerator()
+                            generator.selectionChanged()
+                        }
                         withAnimation(.easeInOut(duration: 0.15)) {
                             value = factor
                             onEditingChanged(true)
