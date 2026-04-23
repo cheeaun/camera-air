@@ -524,6 +524,7 @@ private struct ZoomFactorSlider: View {
     @State private var lastHapticZoom: CGFloat = 0
     @State private var dragX: CGFloat = 0
     private let hapticGenerator = UISelectionFeedbackGenerator()
+    private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
 
     private let presetFactors: [CGFloat] = [0.5, 1.0, 10.0]
     private let tickCount = 40
@@ -539,6 +540,7 @@ private struct ZoomFactorSlider: View {
         .padding(.vertical, 10)
         .onAppear {
             hapticGenerator.prepare()
+            impactGenerator.prepare()
         }
     }
 
@@ -562,8 +564,7 @@ private struct ZoomFactorSlider: View {
                     Text(String(format: "%.2f", value))
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(Color(red: 1.0, green: 0.85, blue: 0.0))
-                        .offset(y: -12)
-                        .animation(.easeOut(duration: 0.1), value: dragX)
+                        .position(x: dragX, y: trackY - 12)
                 }
             }
             .animation(.easeIn(duration: 0.1), value: isDragging)
@@ -705,7 +706,7 @@ private struct ZoomFactorSlider: View {
 
     private func shouldTriggerHaptic(for zoom: CGFloat) -> Bool {
         let intensity = hapticIntensity(for: zoom)
-        let threshold = max(0.3, 1.0 - intensity * 0.7)
+        let threshold = 0.1 + (1.0 - intensity) * 0.3
         return abs(zoom - lastHapticZoom) > threshold
     }
 
@@ -717,8 +718,7 @@ private struct ZoomFactorSlider: View {
     }
 
     private func triggerHaptic(intensity: CGFloat) {
-        let generator = UIImpactFeedbackGenerator(style: intensity > 0.7 ? .medium : .light)
-        generator.impactOccurred(intensity: max(0.3, min(1.0, intensity)))
+        impactGenerator.impactOccurred()
         lastHapticZoom = value
     }
 }
