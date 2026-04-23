@@ -136,6 +136,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         guard !hasPrepared else { return }
         hasPrepared = true
 
+        prepareCaptureFeedback()
+
         Task { [weak self] in
             guard let strongSelf = self else { return }
 
@@ -894,70 +896,61 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func triggerSelectionFeedback() {
-        triggerHaptic(.selection)
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.triggerSelectionFeedback() }
+            return
+        }
+        if selectionGenerator == nil {
+            selectionGenerator = UIImpactFeedbackGenerator(style: .light)
+        }
+        let generator = selectionGenerator
+        generator?.prepare()
+        generator?.impactOccurred()
     }
 
     private var impactGenerator: UIImpactFeedbackGenerator?
     private var heavyImpactGenerator: UIImpactFeedbackGenerator?
+    private var selectionGenerator: UIImpactFeedbackGenerator?
 
     func prepareCaptureFeedback() {
-        impactGenerator = UIImpactFeedbackGenerator(style: .rigid)
+        if impactGenerator == nil {
+            impactGenerator = UIImpactFeedbackGenerator(style: .rigid)
+        }
         impactGenerator?.prepare()
-        heavyImpactGenerator = UIImpactFeedbackGenerator(style: .rigid)
+        if heavyImpactGenerator == nil {
+            heavyImpactGenerator = UIImpactFeedbackGenerator(style: .heavy)
+        }
         heavyImpactGenerator?.prepare()
+        if selectionGenerator == nil {
+            selectionGenerator = UIImpactFeedbackGenerator(style: .light)
+        }
+        selectionGenerator?.prepare()
     }
 
     private func triggerCaptureFeedback() {
         guard Thread.isMainThread else {
-            DispatchQueue.main.sync { triggerCaptureFeedback() }
+            DispatchQueue.main.async { [weak self] in self?.triggerCaptureFeedback() }
             return
         }
-        if let generator = impactGenerator {
-            generator.impactOccurred()
-        } else {
-            let fallback = UIImpactFeedbackGenerator(style: .rigid)
-            fallback.prepare()
-            fallback.impactOccurred()
+        if impactGenerator == nil {
+            impactGenerator = UIImpactFeedbackGenerator(style: .rigid)
         }
+        let generator = impactGenerator
+        generator?.prepare()
+        generator?.impactOccurred()
     }
 
     private func triggerHeavyHaptic() {
         guard Thread.isMainThread else {
-            DispatchQueue.main.sync { triggerHeavyHaptic() }
+            DispatchQueue.main.async { [weak self] in self?.triggerHeavyHaptic() }
             return
         }
-        if let generator = heavyImpactGenerator {
-            generator.impactOccurred()
-        } else {
-            let fallback = UIImpactFeedbackGenerator(style: .rigid)
-            fallback.prepare()
-            fallback.impactOccurred()
+        if heavyImpactGenerator == nil {
+            heavyImpactGenerator = UIImpactFeedbackGenerator(style: .heavy)
         }
-    }
-
-    private func triggerHaptic(_ feedback: HapticFeedback) {
-        DispatchQueue.main.async {
-            switch feedback {
-            case .selection:
-                let generator = UISelectionFeedbackGenerator()
-                generator.prepare()
-                generator.selectionChanged()
-            case .notification(let type):
-                let generator = UINotificationFeedbackGenerator()
-                generator.prepare()
-                generator.notificationOccurred(type)
-            case .impact(let style):
-                let generator = UIImpactFeedbackGenerator(style: style)
-                generator.prepare()
-                generator.impactOccurred()
-            }
-        }
-    }
-
-    private enum HapticFeedback {
-        case selection
-        case notification(UINotificationFeedbackGenerator.FeedbackType)
-        case impact(UIImpactFeedbackGenerator.FeedbackStyle)
+        let generator = heavyImpactGenerator
+        generator?.prepare()
+        generator?.impactOccurred()
     }
 
     private func updateThumbnail(_ image: UIImage?) {

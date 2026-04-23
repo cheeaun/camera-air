@@ -12,6 +12,8 @@ struct CameraRootView: View {
     @State private var isSettingsExpanded = false
     @State private var isThumbnailPressed = false
     @State private var zoomSliderValue: CGFloat = 1.0
+    @State private var settingsHapticTrigger: Int = 0
+    @State private var thumbnailHapticTrigger: Int = 0
 
     init(controller: @autoclosure @escaping () -> CameraSessionController = CameraSessionController()) {
         _controller = StateObject(wrappedValue: controller())
@@ -69,6 +71,8 @@ struct CameraRootView: View {
             guard abs(controller.settings.customZoomFactor - newValue) > 0.01 else { return }
             controller.setCustomZoomFactor(newValue, animated: true)
         }
+        .sensoryFeedback(.selection, trigger: settingsHapticTrigger)
+        .sensoryFeedback(.selection, trigger: thumbnailHapticTrigger)
     }
 
     private var previewLayer: some View {
@@ -191,6 +195,7 @@ struct CameraRootView: View {
                 isOn: isSettingsExpanded,
                 isEnabled: true
             ) {
+                settingsHapticTrigger &+= 1
                 isSettingsExpanded.toggle()
             }
         }
@@ -267,6 +272,7 @@ struct CameraRootView: View {
 
     private var thumbnailButton: some View {
         Button {
+            thumbnailHapticTrigger &+= 1
             controller.openRecentCaptures()
         } label: {
             Group {
@@ -521,8 +527,10 @@ private struct ZoomFactorSlider: View {
     let supportedFactors: [CGFloat]
     let onEditingChanged: (Bool) -> Void
     @State private var isDragging = false
-    @State private var lastHapticZoom: CGFloat = 0
     @State private var dragX: CGFloat = 0
+    @State private var dragHapticTick: Int = 0
+    @State private var dragHapticGenerator = UIImpactFeedbackGenerator(style: .light)
+    @State private var presetHapticGenerator = UIImpactFeedbackGenerator(style: .medium)
 
     private let presetFactors: [CGFloat] = [0.5, 1.0, 10.0]
     private let tickCount = 40
@@ -536,6 +544,11 @@ private struct ZoomFactorSlider: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
+        // Tick-based drag haptics: `dragHapticTick` increments by 1 for every 0.1
+        // of zoom factor. Because the slider is log-scaled, this yields few
+        // haptic events at low zoom (0.5 → 1.0 covers half the slider yet only
+        // ~5 ticks) and many more at high zoom (5 → 10 covers the same span
+        // with ~50 ticks).
     }
 
     private var trackWithTicks: some View {
@@ -569,19 +582,22 @@ private struct ZoomFactorSlider: View {
                         if !isDragging {
                             isDragging = true
                             onEditingChanged(true)
+                            dragHapticTick = hapticTickIndex(for: value)
+                            dragHapticGenerator.prepare()
                         }
                         dragX = gesture.location.x
                         let rawFactor = factor(for: gesture.location.x, in: width)
-                        value = clamp(rawFactor, range: range)
+                        let clampedFactor = clamp(rawFactor, range: range)
+                        value = clampedFactor
 
-                        if shouldTriggerHaptic(for: rawFactor) {
-                            lastHapticZoom = rawFactor
-                            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                        let newTick = hapticTickIndex(for: clampedFactor)
+                        if newTick != dragHapticTick {
+                            dragHapticTick = newTick
+                            dragHapticGenerator.impactOccurred()
                         }
                     }
                     .onEnded { _ in
                         isDragging = false
-                        lastHapticZoom = 0
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                             if !isDragging {
                                 dragX = 0
@@ -616,7 +632,8 @@ private struct ZoomFactorSlider: View {
                     let position = labelX(for: factor, in: width)
 
                     Button {
-                        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                        presetHapticGenerator.prepare()
+                        presetHapticGenerator.impactOccurred()
                         withAnimation(.easeInOut(duration: 0.15)) {
                             value = factor
                             onEditingChanged(true)
@@ -698,17 +715,11 @@ private struct ZoomFactorSlider: View {
         min(max(value, range.lowerBound), range.upperBound)
     }
 
-    private func shouldTriggerHaptic(for zoom: CGFloat) -> Bool {
-        let intensity = hapticIntensity(for: zoom)
-        let threshold = 0.1 + (1.0 - intensity) * 0.3
-        return abs(zoom - lastHapticZoom) > threshold
-    }
-
-    private func hapticIntensity(for zoom: CGFloat) -> CGFloat {
-        let logZoom = log(zoom)
-        let logLower = log(range.lowerBound)
-        let logUpper = log(range.upperBound)
-        return (logZoom - logLower) / (logUpper - logLower)
+    // Integer tick index used to drive drag haptics. Step is 0.1 zoom units so
+    // movement at higher (more zoomed-in) values crosses ticks more frequently
+    // per slider pixel because the slider uses a logarithmic position scale.
+    private func hapticTickIndex(for zoom: CGFloat) -> Int {
+        Int((zoom * 10).rounded(.down))
     }
 }
 
