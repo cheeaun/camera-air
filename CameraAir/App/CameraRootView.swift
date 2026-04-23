@@ -522,6 +522,7 @@ private struct ZoomFactorSlider: View {
     let onEditingChanged: (Bool) -> Void
     @State private var isDragging = false
     @State private var lastHapticZoom: CGFloat = 0
+    @State private var dragX: CGFloat = 0
     private let hapticGenerator = UISelectionFeedbackGenerator()
 
     private let presetFactors: [CGFloat] = [0.5, 1.0, 10.0]
@@ -534,7 +535,7 @@ private struct ZoomFactorSlider: View {
             presetButtons
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 20)
         .padding(.vertical, 10)
         .onAppear {
             hapticGenerator.prepare()
@@ -556,7 +557,16 @@ private struct ZoomFactorSlider: View {
                         .frame(width: 1, height: isMajor ? 6 : 4)
                         .position(x: x, y: trackY - (isMajor ? 3 : 2))
                 }
+
+                if isDragging {
+                    Text(String(format: "%.2f", value))
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(Color(red: 1.0, green: 0.85, blue: 0.0))
+                        .offset(y: -12)
+                        .animation(.easeOut(duration: 0.1), value: dragX)
+                }
             }
+            .animation(.easeIn(duration: 0.1), value: isDragging)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -565,6 +575,7 @@ private struct ZoomFactorSlider: View {
                             isDragging = true
                             onEditingChanged(true)
                         }
+                        dragX = gesture.location.x
                         let rawFactor = factor(for: gesture.location.x, in: width)
                         value = clamp(rawFactor, range: range)
 
@@ -575,6 +586,11 @@ private struct ZoomFactorSlider: View {
                     .onEnded { _ in
                         isDragging = false
                         lastHapticZoom = 0
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            if !isDragging {
+                                dragX = 0
+                            }
+                        }
                         onEditingChanged(false)
                     }
             )
@@ -627,7 +643,6 @@ private struct ZoomFactorSlider: View {
             }
         }
         .frame(height: 28)
-        .clipped()
     }
 
     private var range: ClosedRange<CGFloat> {
@@ -658,7 +673,8 @@ private struct ZoomFactorSlider: View {
     private func factorForTick(index: Int, total: Int) -> CGFloat {
         let logLower = log(range.lowerBound)
         let logUpper = log(range.upperBound)
-        let logProgress = pow(CGFloat(index) / CGFloat(total - 1), 2.0)
+        let progress = CGFloat(index) / CGFloat(total - 1)
+        let logProgress = sqrt(progress)
         let logFactor = logLower + (logUpper - logLower) * logProgress
         return exp(logFactor)
     }
@@ -666,7 +682,8 @@ private struct ZoomFactorSlider: View {
     private func tickPosition(for index: Int, total: Int, in width: CGFloat) -> CGFloat {
         let logLower = log(range.lowerBound)
         let logUpper = log(range.upperBound)
-        let logProgress = pow(CGFloat(index) / CGFloat(total - 1), 2.0)
+        let progress = CGFloat(index) / CGFloat(total - 1)
+        let logProgress = sqrt(progress)
         let logValue = logLower + (logUpper - logLower) * logProgress
         let normalizedLogProgress = (logValue - logLower) / (logUpper - logLower)
         return normalizedLogProgress * width
@@ -675,7 +692,8 @@ private struct ZoomFactorSlider: View {
     private func isTickMajor(index: Int, total: Int) -> Bool {
         let logLower = log(range.lowerBound)
         let logUpper = log(range.upperBound)
-        let logProgress = pow(CGFloat(index) / CGFloat(total - 1), 2.0)
+        let progress = CGFloat(index) / CGFloat(total - 1)
+        let logProgress = sqrt(progress)
         let logFactor = logLower + (logUpper - logLower) * logProgress
         let factor = exp(logFactor)
         return abs(factor - 1.0) < 0.05 || index == 0 || index == total - 1
