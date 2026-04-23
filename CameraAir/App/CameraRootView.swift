@@ -598,10 +598,10 @@ private struct ZoomFactorSlider: View {
         GeometryReader { geometry in
             let width = geometry.size.width
 
-            HStack(spacing: 0) {
+            ZStack(alignment: .top) {
                 ForEach(presetFactors, id: \.self) { factor in
                     let isActive = abs(factor - value) < 0.1
-                    let position = max(14, min(labelX(for: factor, in: width), width - 14))
+                    let position = labelX(for: factor, in: width)
 
                     Button {
                         hapticGenerator.selectionChanged()
@@ -625,9 +625,9 @@ private struct ZoomFactorSlider: View {
                     .position(x: position, y: 14)
                 }
             }
-            .frame(width: width)
         }
         .frame(height: 28)
+        .clipped()
     }
 
     private var range: ClosedRange<CGFloat> {
