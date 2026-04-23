@@ -523,8 +523,6 @@ private struct ZoomFactorSlider: View {
     @State private var isDragging = false
     @State private var lastHapticZoom: CGFloat = 0
     @State private var dragX: CGFloat = 0
-    private let hapticGenerator = UISelectionFeedbackGenerator()
-    private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
 
     private let presetFactors: [CGFloat] = [0.5, 1.0, 10.0]
     private let tickCount = 40
@@ -538,10 +536,6 @@ private struct ZoomFactorSlider: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
-        .onAppear {
-            hapticGenerator.prepare()
-            impactGenerator.prepare()
-        }
     }
 
     private var trackWithTicks: some View {
@@ -581,7 +575,7 @@ private struct ZoomFactorSlider: View {
                         value = clamp(rawFactor, range: range)
 
                         if shouldTriggerHaptic(for: rawFactor) {
-                            triggerHaptic(intensity: hapticIntensity(for: rawFactor))
+                            triggerHaptic()
                         }
                     }
                     .onEnded { _ in
@@ -621,8 +615,9 @@ private struct ZoomFactorSlider: View {
                     let position = labelX(for: factor, in: width)
 
                     Button {
-                        hapticGenerator.selectionChanged()
-                        hapticGenerator.prepare()
+                        let generator = UISelectionFeedbackGenerator()
+                        generator.prepare()
+                        generator.selectionChanged()
                         withAnimation(.easeInOut(duration: 0.15)) {
                             value = factor
                             onEditingChanged(true)
@@ -717,8 +712,10 @@ private struct ZoomFactorSlider: View {
         return (logZoom - logLower) / (logUpper - logLower)
     }
 
-    private func triggerHaptic(intensity: CGFloat) {
-        impactGenerator.impactOccurred()
+    private func triggerHaptic() {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.prepare()
+        generator.impactOccurred()
         lastHapticZoom = value
     }
 }
