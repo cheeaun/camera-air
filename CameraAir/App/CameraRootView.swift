@@ -576,9 +576,7 @@ private struct ZoomFactorSlider: View {
 
                         if shouldTriggerHaptic(for: rawFactor) {
                             lastHapticZoom = rawFactor
-                            DispatchQueue.main.async {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            }
+                            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
                         }
                     }
                     .onEnded { _ in
@@ -618,10 +616,7 @@ private struct ZoomFactorSlider: View {
                     let position = labelX(for: factor, in: width)
 
                     Button {
-                        DispatchQueue.main.async {
-                            let generator = UISelectionFeedbackGenerator()
-                            generator.selectionChanged()
-                        }
+                        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
                         withAnimation(.easeInOut(duration: 0.15)) {
                             value = factor
                             onEditingChanged(true)
