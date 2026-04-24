@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
 @preconcurrency import Photos
+@preconcurrency import AudioToolbox
 import UIKit
 
 final class CameraSessionController: NSObject, ObservableObject, @unchecked Sendable {
@@ -896,61 +897,25 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func triggerSelectionFeedback() {
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in self?.triggerSelectionFeedback() }
-            return
-        }
-        if selectionGenerator == nil {
-            selectionGenerator = UIImpactFeedbackGenerator(style: .medium)
-        }
-        let generator = selectionGenerator
-        generator?.prepare()
-        generator?.impactOccurred()
+        // Use AudioServicesPlaySystemSound to bypass AVAudioSession issues
+        // when audio input is active (e.g., Live Photo ON).
+        AudioServicesPlaySystemSound(1105) // Medium tap
     }
 
-    private var impactGenerator: UIImpactFeedbackGenerator?
-    private var heavyImpactGenerator: UIImpactFeedbackGenerator?
-    private var selectionGenerator: UIImpactFeedbackGenerator?
-
     func prepareCaptureFeedback() {
-        if impactGenerator == nil {
-            impactGenerator = UIImpactFeedbackGenerator(style: .rigid)
-        }
-        impactGenerator?.prepare()
-        if heavyImpactGenerator == nil {
-            heavyImpactGenerator = UIImpactFeedbackGenerator(style: .heavy)
-        }
-        heavyImpactGenerator?.prepare()
-        if selectionGenerator == nil {
-            selectionGenerator = UIImpactFeedbackGenerator(style: .medium)
-        }
-        selectionGenerator?.prepare()
+        // No preparation needed for AudioServicesPlaySystemSound
     }
 
     private func triggerCaptureFeedback() {
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in self?.triggerCaptureFeedback() }
-            return
-        }
-        if impactGenerator == nil {
-            impactGenerator = UIImpactFeedbackGenerator(style: .rigid)
-        }
-        let generator = impactGenerator
-        generator?.prepare()
-        generator?.impactOccurred()
+        // Use AudioServicesPlaySystemSound to bypass AVAudioSession issues
+        // when audio input is active (e.g., Live Photo ON).
+        AudioServicesPlaySystemSound(1104) // Light tap
     }
 
     private func triggerHeavyHaptic() {
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in self?.triggerHeavyHaptic() }
-            return
-        }
-        if heavyImpactGenerator == nil {
-            heavyImpactGenerator = UIImpactFeedbackGenerator(style: .heavy)
-        }
-        let generator = heavyImpactGenerator
-        generator?.prepare()
-        generator?.impactOccurred()
+        // Use AudioServicesPlaySystemSound to bypass AVAudioSession issues
+        // when audio input is active (e.g., Live Photo ON).
+        AudioServicesPlaySystemSound(1106) // Heavy tap
     }
 
     private func updateThumbnail(_ image: UIImage?) {
