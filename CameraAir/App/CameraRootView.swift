@@ -12,7 +12,6 @@ struct CameraRootView: View {
     @State private var isSettingsExpanded = false
     @State private var isThumbnailPressed = false
     @State private var zoomSliderValue: CGFloat = 1.0
-    @State private var interfaceHapticGenerator = UIImpactFeedbackGenerator(style: .medium)
 
     init(controller: @autoclosure @escaping () -> CameraSessionController = CameraSessionController()) {
         _controller = StateObject(wrappedValue: controller())
@@ -29,10 +28,6 @@ struct CameraRootView: View {
         .background(Color.black)
         .task {
             controller.prepare()
-        }
-        .onAppear {
-            // Prepare haptic generator in advance for better responsiveness on real devices
-            interfaceHapticGenerator.prepare()
         }
         .onOpenURL { url in
             controller.handleDeepLink(url)
@@ -362,8 +357,11 @@ struct CameraRootView: View {
     }
 
     private func triggerInterfaceHaptic() {
-        interfaceHapticGenerator.prepare()
-        interfaceHapticGenerator.impactOccurred()
+        // Always create a fresh generator to avoid issues with invalidated
+        // generators when the audio session changes (e.g., Live Photo ON).
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.prepare()
+        generator.impactOccurred()
     }
 
     private var permissionOverlay: some View {
