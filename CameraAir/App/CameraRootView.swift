@@ -30,6 +30,10 @@ struct CameraRootView: View {
         .task {
             controller.prepare()
         }
+        .onAppear {
+            // Prepare haptic generator in advance for better responsiveness on real devices
+            interfaceHapticGenerator.prepare()
+        }
         .onOpenURL { url in
             controller.handleDeepLink(url)
         }
@@ -317,6 +321,7 @@ struct CameraRootView: View {
 
     private var lensButton: some View {
         Button {
+            triggerInterfaceHaptic()
             controller.switchLens()
         } label: {
             VStack(spacing: 6) {
@@ -557,6 +562,11 @@ private struct ZoomFactorSlider: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
+        .onAppear {
+            // Prepare haptic generators in advance for better responsiveness
+            dragHapticGenerator.prepare()
+            presetHapticGenerator.prepare()
+        }
         // Tick-based drag haptics: `dragHapticTick` increments by 1 for every 0.1
         // of zoom factor. Because the slider is log-scaled, this yields few
         // haptic events at low zoom (0.5 → 1.0 covers half the slider yet only
@@ -728,11 +738,18 @@ private struct ZoomFactorSlider: View {
         min(max(value, range.lowerBound), range.upperBound)
     }
 
-    // Integer tick index used to drive drag haptics. Step is 0.1 zoom units so
-    // movement at higher (more zoomed-in) values crosses ticks more frequently
-    // per slider pixel because the slider uses a logarithmic position scale.
+    // Integer tick index used to drive drag haptics. This matches the visual
+    // tick index used for rendering, so haptic feedback aligns with what the
+    // user sees. Because the slider uses a log-like scale, this naturally
+    // yields fewer haptic events at low zoom (0.5 → 1.0) and more at
+    // high zoom (5 → 10).
     private func hapticTickIndex(for zoom: CGFloat) -> Int {
-        Int((zoom * 10).rounded(.down))
+        let logLower = log(range.lowerBound)
+        let logUpper = log(range.upperBound)
+        let logFactor = log(max(zoom, range.lowerBound))
+        let logProgress = (logFactor - logLower) / (logUpper - logLower)
+        let progress = logProgress * logProgress  // reverse sqrt() from tickPosition
+        return Int((progress * CGFloat(tickCount - 1)).rounded(.down))
     }
 }
 
