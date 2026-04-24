@@ -901,7 +901,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             return
         }
         if selectionGenerator == nil {
-            selectionGenerator = UIImpactFeedbackGenerator(style: .light)
+            selectionGenerator = UIImpactFeedbackGenerator(style: .medium)
         }
         let generator = selectionGenerator
         generator?.prepare()
@@ -922,7 +922,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
         heavyImpactGenerator?.prepare()
         if selectionGenerator == nil {
-            selectionGenerator = UIImpactFeedbackGenerator(style: .light)
+            selectionGenerator = UIImpactFeedbackGenerator(style: .medium)
         }
         selectionGenerator?.prepare()
     }

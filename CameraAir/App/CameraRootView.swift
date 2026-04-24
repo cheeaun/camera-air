@@ -12,8 +12,7 @@ struct CameraRootView: View {
     @State private var isSettingsExpanded = false
     @State private var isThumbnailPressed = false
     @State private var zoomSliderValue: CGFloat = 1.0
-    @State private var settingsHapticTrigger: Int = 0
-    @State private var thumbnailHapticTrigger: Int = 0
+    @State private var interfaceHapticGenerator = UIImpactFeedbackGenerator(style: .medium)
 
     init(controller: @autoclosure @escaping () -> CameraSessionController = CameraSessionController()) {
         _controller = StateObject(wrappedValue: controller())
@@ -71,8 +70,6 @@ struct CameraRootView: View {
             guard abs(controller.settings.customZoomFactor - newValue) > 0.01 else { return }
             controller.setCustomZoomFactor(newValue, animated: true)
         }
-        .sensoryFeedback(.selection, trigger: settingsHapticTrigger)
-        .sensoryFeedback(.selection, trigger: thumbnailHapticTrigger)
     }
 
     private var previewLayer: some View {
@@ -151,15 +148,24 @@ struct CameraRootView: View {
             FlashMenu(
                 selection: controller.settings.flash,
                 isEnabled: controller.capabilities.hasFlash,
-                onSelect: controller.setFlash
+                onSelect: { flash in
+                    triggerInterfaceHaptic()
+                    controller.setFlash(flash)
+                }
             )
 
             AspectRatioControls(
                 ratioText: controller.settings.aspectRatio.title(for: controller.settings.aspectOrientation),
                 isRatioEnabled: !controller.settings.aspectOrientation.isSquare,
                 orientation: controller.settings.aspectOrientation,
-                onRatioTap: controller.cycleAspectRatio,
-                onOrientationTap: controller.cycleAspectOrientation
+                onRatioTap: {
+                    triggerInterfaceHaptic()
+                    controller.cycleAspectRatio()
+                },
+                onOrientationTap: {
+                    triggerInterfaceHaptic()
+                    controller.cycleAspectOrientation()
+                }
             )
 
             ToggleChip(
@@ -171,6 +177,7 @@ struct CameraRootView: View {
                 isOn: controller.settings.isExposureLocked,
                 isEnabled: controller.capabilities.supportsExposureLock
             ) {
+                triggerInterfaceHaptic()
                 controller.toggleExposureLock()
             }
 
@@ -182,6 +189,7 @@ struct CameraRootView: View {
                     isEnabled: controller.capabilities.supportsLivePhoto
                 ) {
                     if controller.capabilities.supportsLivePhoto {
+                        triggerInterfaceHaptic()
                         controller.toggleLivePhoto()
                     }
                 }
@@ -195,7 +203,7 @@ struct CameraRootView: View {
                 isOn: isSettingsExpanded,
                 isEnabled: true
             ) {
-                settingsHapticTrigger &+= 1
+                triggerInterfaceHaptic()
                 isSettingsExpanded.toggle()
             }
         }
@@ -272,7 +280,7 @@ struct CameraRootView: View {
 
     private var thumbnailButton: some View {
         Button {
-            thumbnailHapticTrigger &+= 1
+            triggerInterfaceHaptic()
             controller.openRecentCaptures()
         } label: {
             Group {
@@ -346,6 +354,11 @@ struct CameraRootView: View {
         } else if !controller.isRecording {
             controller.setMode(.video)
         }
+    }
+
+    private func triggerInterfaceHaptic() {
+        interfaceHapticGenerator.prepare()
+        interfaceHapticGenerator.impactOccurred()
     }
 
     private var permissionOverlay: some View {
