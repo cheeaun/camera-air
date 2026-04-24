@@ -902,15 +902,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         AudioServicesPlaySystemSound(1105) // Medium tap
     }
 
-    /// Public interface for Views to trigger haptic feedback that works even when
-    /// Live Photo is ON (audio session active).
-    func triggerInterfaceHaptic() {
-        triggerSelectionFeedback()
-    }
-
-    private var impactGenerator: UIImpactFeedbackGenerator?
-    private var heavyImpactGenerator: UIImpactFeedbackGenerator?
-
     func prepareCaptureFeedback() {
         // No preparation needed for AudioServicesPlaySystemSound
     }
