@@ -143,6 +143,12 @@ struct CameraRootView: View {
         }
     }
 
+    /// Triggers haptic feedback using the controller's proven method
+    /// that works even when Live Photo is ON.
+    private func triggerInterfaceHaptic() {
+        controller.triggerInterfaceHaptic()
+    }
+
     private var topBar: some View {
         HStack(spacing: 10) {
             FlashMenu(
@@ -270,7 +276,8 @@ struct CameraRootView: View {
                         if !isEditing {
                             controller.commitZoomSelection()
                         }
-                    }
+                    },
+                    onHaptic: triggerInterfaceHaptic
                 )
                 .frame(maxWidth: .infinity)
             }
@@ -341,7 +348,7 @@ struct CameraRootView: View {
     private func handlePhotoSnapTap() {
         guard !controller.isRecording else { return }
         if controller.mode == .photo {
-            AudioServicesPlaySystemSound(1104) // Light tap
+            triggerInterfaceHaptic()
             controller.performPrimaryAction()
         } else {
             controller.setMode(.photo)
@@ -350,7 +357,7 @@ struct CameraRootView: View {
 
     private func handleVideoSnapTap() {
         if controller.mode == .video {
-            AudioServicesPlaySystemSound(1104) // Light tap
+            triggerInterfaceHaptic()
             controller.performPrimaryAction()
         } else if !controller.isRecording {
             controller.setMode(.video)
@@ -543,9 +550,10 @@ private struct ZoomFactorSlider: View {
 
     let supportedFactors: [CGFloat]
     let onEditingChanged: (Bool) -> Void
+    let onHaptic: () -> Void
+    
     @State private var isDragging = false
     @State private var dragX: CGFloat = 0
-    @State private var dragHapticTick: Int = 0
 
     private let presetFactors: [CGFloat] = [0.5, 1.0, 10.0]
     private let tickCount = 40
@@ -559,11 +567,6 @@ private struct ZoomFactorSlider: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
-        // Tick-based drag haptics: `dragHapticTick` increments by 1 for every 0.1
-        // of zoom factor. Because the slider is log-scaled, this yields few
-        // haptic events at low zoom (0.5 → 1.0 covers half the slider yet only
-        // ~5 ticks) and many more at high zoom (5 → 10 covers the same span
-        // with ~50 ticks).
     }
 
     private var trackWithTicks: some View {
@@ -646,7 +649,7 @@ private struct ZoomFactorSlider: View {
                     let position = labelX(for: factor, in: width)
 
                     Button {
-                        AudioServicesPlaySystemSound(1105) // Medium tap
+                        onHaptic()
                         withAnimation(.easeInOut(duration: 0.15)) {
                             value = factor
                             onEditingChanged(true)
@@ -736,10 +739,12 @@ private struct ZoomFactorSlider: View {
     private func hapticTickIndex(for zoom: CGFloat) -> Int {
         let logLower = log(range.lowerBound)
         let logUpper = log(range.upperBound)
-        let logFactor = log(max(zoom, range.lowerBound))
-        let logProgress = (logFactor - logLower) / (logUpper - logLower)
-        let progress = logProgress * logProgress  // reverse sqrt() from tickPosition
-        return Int((progress * CGFloat(tickCount - 1)).rounded(.down))
+        return (logZoom - logLower) / (logUpper - logLower)
+    }
+
+    private func triggerHaptic(intensity: CGFloat) {
+        onHaptic()
+        lastHapticZoom = value
     }
 }
 
