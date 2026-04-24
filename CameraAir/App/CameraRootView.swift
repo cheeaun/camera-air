@@ -3,7 +3,6 @@ import Photos
 import PhotosUI
 import AVKit
 import UIKit
-import AudioToolbox
 
 struct CameraRootView: View {
     @Environment(\.openURL) private var openURL
@@ -341,7 +340,7 @@ struct CameraRootView: View {
     private func handlePhotoSnapTap() {
         guard !controller.isRecording else { return }
         if controller.mode == .photo {
-            AudioServicesPlaySystemSound(1104) // Light tap
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             controller.performPrimaryAction()
         } else {
             controller.setMode(.photo)
@@ -350,7 +349,7 @@ struct CameraRootView: View {
 
     private func handleVideoSnapTap() {
         if controller.mode == .video {
-            AudioServicesPlaySystemSound(1104) // Light tap
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             controller.performPrimaryAction()
         } else if !controller.isRecording {
             controller.setMode(.video)
@@ -358,11 +357,11 @@ struct CameraRootView: View {
     }
 
     private func triggerInterfaceHaptic() {
-        // Use AudioServicesPlaySystemSound for haptic feedback because
-        // UIImpactFeedbackGenerator is disabled when audio input is active
-        // (e.g., Live Photo ON). AudioServicesPlaySystemSound directly
-        // accesses the Taptic Engine and works regardless of audio session state.
-        AudioServicesPlaySystemSound(1105) // Medium tap haptic
+        // Always create a fresh generator to avoid issues with invalidated
+        // generators when the audio session changes (e.g., Live Photo ON).
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.prepare()
+        generator.impactOccurred()
     }
 
     private var permissionOverlay: some View {
@@ -546,6 +545,8 @@ private struct ZoomFactorSlider: View {
     @State private var isDragging = false
     @State private var dragX: CGFloat = 0
     @State private var dragHapticTick: Int = 0
+    @State private var dragHapticGenerator = UIImpactFeedbackGenerator(style: .light)
+    @State private var presetHapticGenerator = UIImpactFeedbackGenerator(style: .medium)
 
     private let presetFactors: [CGFloat] = [0.5, 1.0, 10.0]
     private let tickCount = 40
@@ -559,6 +560,11 @@ private struct ZoomFactorSlider: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
+        .onAppear {
+            // Prepare haptic generators in advance for better responsiveness
+            dragHapticGenerator.prepare()
+            presetHapticGenerator.prepare()
+        }
         // Tick-based drag haptics: `dragHapticTick` increments by 1 for every 0.1
         // of zoom factor. Because the slider is log-scaled, this yields few
         // haptic events at low zoom (0.5 → 1.0 covers half the slider yet only
@@ -592,12 +598,13 @@ private struct ZoomFactorSlider: View {
             .animation(.easeIn(duration: 0.1), value: isDragging)
             .contentShape(Rectangle())
             .gesture(
-                    DragGesture(minimumDistance: 0)
+                DragGesture(minimumDistance: 0)
                     .onChanged { gesture in
                         if !isDragging {
                             isDragging = true
                             onEditingChanged(true)
                             dragHapticTick = hapticTickIndex(for: value)
+                            dragHapticGenerator.prepare()
                         }
                         dragX = gesture.location.x
                         let rawFactor = factor(for: gesture.location.x, in: width)
@@ -607,7 +614,7 @@ private struct ZoomFactorSlider: View {
                         let newTick = hapticTickIndex(for: clampedFactor)
                         if newTick != dragHapticTick {
                             dragHapticTick = newTick
-                            AudioServicesPlaySystemSound(1104) // Light tap
+                            dragHapticGenerator.impactOccurred()
                         }
                     }
                     .onEnded { _ in
@@ -646,7 +653,8 @@ private struct ZoomFactorSlider: View {
                     let position = labelX(for: factor, in: width)
 
                     Button {
-                        AudioServicesPlaySystemSound(1105) // Medium tap
+                        presetHapticGenerator.prepare()
+                        presetHapticGenerator.impactOccurred()
                         withAnimation(.easeInOut(duration: 0.15)) {
                             value = factor
                             onEditingChanged(true)
