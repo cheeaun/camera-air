@@ -603,7 +603,7 @@ private struct ZoomFactorSlider: View {
     private let tickCount = 40
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 1) {
             trackWithTicks
             triangleIndicator
             presetButtons
@@ -678,7 +678,7 @@ private struct ZoomFactorSlider: View {
                     }
             )
         }
-        .frame(height: 36)
+        .frame(height: 30)
     }
 
     private var triangleIndicator: some View {
