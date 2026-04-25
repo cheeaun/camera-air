@@ -678,7 +678,7 @@ private struct ZoomFactorSlider: View {
                     }
             )
         }
-        .frame(height: 30)
+        .frame(height: 20)
     }
 
     private var triangleIndicator: some View {
