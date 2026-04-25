@@ -136,8 +136,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         guard !hasPrepared else { return }
         hasPrepared = true
 
-        prepareCaptureFeedback()
-
         Task { [weak self] in
             guard let strongSelf = self else { return }
 
@@ -896,61 +894,21 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func triggerSelectionFeedback() {
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in self?.triggerSelectionFeedback() }
-            return
+        Task { @MainActor in
+            CameraHaptics.interface()
         }
-        if selectionGenerator == nil {
-            selectionGenerator = UIImpactFeedbackGenerator(style: .medium)
-        }
-        let generator = selectionGenerator
-        generator?.prepare()
-        generator?.impactOccurred()
-    }
-
-    private var impactGenerator: UIImpactFeedbackGenerator?
-    private var heavyImpactGenerator: UIImpactFeedbackGenerator?
-    private var selectionGenerator: UIImpactFeedbackGenerator?
-
-    func prepareCaptureFeedback() {
-        if impactGenerator == nil {
-            impactGenerator = UIImpactFeedbackGenerator(style: .rigid)
-        }
-        impactGenerator?.prepare()
-        if heavyImpactGenerator == nil {
-            heavyImpactGenerator = UIImpactFeedbackGenerator(style: .heavy)
-        }
-        heavyImpactGenerator?.prepare()
-        if selectionGenerator == nil {
-            selectionGenerator = UIImpactFeedbackGenerator(style: .medium)
-        }
-        selectionGenerator?.prepare()
     }
 
     private func triggerCaptureFeedback() {
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in self?.triggerCaptureFeedback() }
-            return
+        Task { @MainActor in
+            CameraHaptics.rigid()
         }
-        if impactGenerator == nil {
-            impactGenerator = UIImpactFeedbackGenerator(style: .rigid)
-        }
-        let generator = impactGenerator
-        generator?.prepare()
-        generator?.impactOccurred()
     }
 
     private func triggerHeavyHaptic() {
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in self?.triggerHeavyHaptic() }
-            return
+        Task { @MainActor in
+            CameraHaptics.heavy()
         }
-        if heavyImpactGenerator == nil {
-            heavyImpactGenerator = UIImpactFeedbackGenerator(style: .heavy)
-        }
-        let generator = heavyImpactGenerator
-        generator?.prepare()
-        generator?.impactOccurred()
     }
 
     private func updateThumbnail(_ image: UIImage?) {

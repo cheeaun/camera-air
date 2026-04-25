@@ -4,6 +4,62 @@ import PhotosUI
 import AVKit
 import UIKit
 
+@MainActor
+enum CameraHaptics {
+    private static weak var hostView: UIView?
+    private static var activeGenerators: [UIImpactFeedbackGenerator] = []
+
+    static func setHostView(_ view: UIView) {
+        hostView = view
+    }
+
+    static func light() {
+        impact(.light)
+    }
+
+    static func interface() {
+        impact(.medium)
+    }
+
+    static func rigid() {
+        impact(.rigid)
+    }
+
+    static func heavy() {
+        impact(.heavy)
+    }
+
+    private static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
+        let generator: UIImpactFeedbackGenerator
+        if #available(iOS 17.5, *), let hostView {
+            generator = UIImpactFeedbackGenerator(style: style, view: hostView)
+        } else {
+            generator = UIImpactFeedbackGenerator(style: style)
+        }
+
+        activeGenerators.append(generator)
+        generator.prepare()
+        generator.impactOccurred()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            activeGenerators.removeAll { $0 === generator }
+        }
+    }
+}
+
+private struct HapticHostView: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.isUserInteractionEnabled = false
+        CameraHaptics.setHostView(view)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        CameraHaptics.setHostView(uiView)
+    }
+}
+
 struct CameraRootView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
@@ -25,6 +81,7 @@ struct CameraRootView: View {
                 permissionOverlay
             }
         }
+        .background(HapticHostView().allowsHitTesting(false))
         .background(Color.black)
         .task {
             controller.prepare()
@@ -339,8 +396,8 @@ struct CameraRootView: View {
 
     private func handlePhotoSnapTap() {
         guard !controller.isRecording else { return }
+        CameraHaptics.light()
         if controller.mode == .photo {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             controller.performPrimaryAction()
         } else {
             controller.setMode(.photo)
@@ -348,8 +405,8 @@ struct CameraRootView: View {
     }
 
     private func handleVideoSnapTap() {
+        CameraHaptics.light()
         if controller.mode == .video {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             controller.performPrimaryAction()
         } else if !controller.isRecording {
             controller.setMode(.video)
@@ -357,11 +414,7 @@ struct CameraRootView: View {
     }
 
     private func triggerInterfaceHaptic() {
-        // Always create a fresh generator to avoid issues with invalidated
-        // generators when the audio session changes (e.g., Live Photo ON).
-        let generator = UIImpactFeedbackGenerator(style: .medium)
-        generator.prepare()
-        generator.impactOccurred()
+        CameraHaptics.interface()
     }
 
     private var permissionOverlay: some View {
@@ -545,8 +598,6 @@ private struct ZoomFactorSlider: View {
     @State private var isDragging = false
     @State private var dragX: CGFloat = 0
     @State private var dragHapticTick: Int = 0
-    @State private var dragHapticGenerator = UIImpactFeedbackGenerator(style: .light)
-    @State private var presetHapticGenerator = UIImpactFeedbackGenerator(style: .medium)
 
     private let presetFactors: [CGFloat] = [0.5, 1.0, 10.0]
     private let tickCount = 40
@@ -560,16 +611,8 @@ private struct ZoomFactorSlider: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
-        .onAppear {
-            // Prepare haptic generators in advance for better responsiveness
-            dragHapticGenerator.prepare()
-            presetHapticGenerator.prepare()
-        }
-        // Tick-based drag haptics: `dragHapticTick` increments by 1 for every 0.1
-        // of zoom factor. Because the slider is log-scaled, this yields few
-        // haptic events at low zoom (0.5 → 1.0 covers half the slider yet only
-        // ~5 ticks) and many more at high zoom (5 → 10 covers the same span
-        // with ~50 ticks).
+        // Tick-based drag haptics use exponentially spaced ticks: sparse on the
+        // wide-angle side, increasingly dense toward telephoto.
     }
 
     private var trackWithTicks: some View {
@@ -604,7 +647,7 @@ private struct ZoomFactorSlider: View {
                             isDragging = true
                             onEditingChanged(true)
                             dragHapticTick = hapticTickIndex(for: value)
-                            dragHapticGenerator.prepare()
+                            CameraHaptics.light()
                         }
                         dragX = gesture.location.x
                         let rawFactor = factor(for: gesture.location.x, in: width)
@@ -614,7 +657,7 @@ private struct ZoomFactorSlider: View {
                         let newTick = hapticTickIndex(for: clampedFactor)
                         if newTick != dragHapticTick {
                             dragHapticTick = newTick
-                            dragHapticGenerator.impactOccurred()
+                            CameraHaptics.light()
                         }
                     }
                     .onEnded { _ in
@@ -653,8 +696,7 @@ private struct ZoomFactorSlider: View {
                     let position = labelX(for: factor, in: width)
 
                     Button {
-                        presetHapticGenerator.prepare()
-                        presetHapticGenerator.impactOccurred()
+                        CameraHaptics.interface()
                         withAnimation(.easeInOut(duration: 0.15)) {
                             value = factor
                             onEditingChanged(true)
@@ -771,6 +813,7 @@ private struct FlashMenu: View {
         Menu {
             ForEach(FlashPreference.allCases) { option in
                 Button {
+                    CameraHaptics.interface()
                     onSelect(option)
                 } label: {
                     if option == selection {
@@ -858,6 +901,7 @@ private struct OptionStrip<Option: Hashable & Identifiable>: View {
         ) {
             ForEach(options) { option in
                 Button {
+                    CameraHaptics.interface()
                     onSelect(option)
                 } label: {
                     Text(option[keyPath: label])
@@ -1002,6 +1046,7 @@ private struct RecentCapturesView: View {
                         LazyVGrid(columns: gridColumns, spacing: 8) {
                             ForEach(assets) { asset in
                                 Button {
+                                    CameraHaptics.interface()
                                     onSelectAsset(asset)
                                 } label: {
                                     AssetGridThumbnail(asset: asset)
@@ -1019,11 +1064,13 @@ private struct RecentCapturesView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Done") {
+                        CameraHaptics.interface()
                         onDismiss()
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Browse All Photos") {
+                        CameraHaptics.interface()
                         isLibraryPickerPresented = true
                     }
                 }
@@ -1165,6 +1212,7 @@ private struct CaptureViewer: View {
                 HStack {
                     Spacer()
                     Button {
+                        CameraHaptics.interface()
                         onDismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
