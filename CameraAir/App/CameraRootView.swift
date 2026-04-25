@@ -619,6 +619,7 @@ private struct ZoomFactorSlider: View {
         GeometryReader { geometry in
             let width = geometry.size.width
             let trackY: CGFloat = 16
+            let labelY: CGFloat = isDragging ? trackY - 28 : trackY - 14
 
             ZStack(alignment: .top) {
                 ForEach(0..<tickCount, id: \.self) { index in
@@ -631,11 +632,17 @@ private struct ZoomFactorSlider: View {
                         .position(x: x, y: trackY - (isMajor ? 3 : 2))
                 }
 
-                if isDragging {
-                    Text(String(format: "%.2f", value))
+                if shouldShowZoomLabel {
+                    Text(formattedZoomLabel)
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(Color(red: 1.0, green: 0.85, blue: 0.0))
-                        .position(x: dragX, y: trackY - 12)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color.black.opacity(0.28))
+                        )
+                        .position(x: currentLabelX(in: width), y: labelY)
                 }
             }
             .animation(.easeIn(duration: 0.1), value: isDragging)
@@ -671,7 +678,7 @@ private struct ZoomFactorSlider: View {
                     }
             )
         }
-        .frame(height: 20)
+        .frame(height: 36)
     }
 
     private var triangleIndicator: some View {
@@ -720,8 +727,29 @@ private struct ZoomFactorSlider: View {
         .frame(height: 28)
     }
 
+    private var shouldShowZoomLabel: Bool {
+        !isPresetZoom(value)
+    }
+
+    private var formattedZoomLabel: String {
+        if value >= 10 {
+            return "10x"
+        }
+        if value >= 1 {
+            return String(format: "%.1fx", value)
+        }
+        return String(format: "%.2fx", value)
+    }
+
     private var range: ClosedRange<CGFloat> {
         0.5...10.0
+    }
+
+    private func currentLabelX(in width: CGFloat) -> CGFloat {
+        if isDragging, dragX > 0 {
+            return min(max(dragX, 0), width)
+        }
+        return labelX(for: value, in: width)
     }
 
     private func factor(for locationX: CGFloat, in width: CGFloat) -> CGFloat {
@@ -776,6 +804,10 @@ private struct ZoomFactorSlider: View {
 
     private func clamp(_ value: CGFloat, range: ClosedRange<CGFloat>) -> CGFloat {
         min(max(value, range.lowerBound), range.upperBound)
+    }
+
+    private func isPresetZoom(_ zoom: CGFloat) -> Bool {
+        presetFactors.contains { abs($0 - zoom) < 0.01 }
     }
 
     // Integer tick index used to drive drag haptics. This matches the visual
