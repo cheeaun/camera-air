@@ -466,6 +466,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                let audioDevice = AVCaptureDevice.default(for: .audio),
                let audioInput = try? AVCaptureDeviceInput(device: audioDevice),
                strongSelf.session.canAddInput(audioInput) {
+                strongSelf.configureAudioSessionForHapticsDuringRecording()
                 strongSelf.session.addInput(audioInput)
                 strongSelf.currentAudioInput = audioInput
             }
@@ -678,6 +679,14 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
 
         applyZoomSettings(animated: false)
+    }
+
+    private func configureAudioSessionForHapticsDuringRecording() {
+        do {
+            try AVAudioSession.sharedInstance().setAllowHapticsAndSystemSoundsDuringRecording(true)
+        } catch {
+            NSLog("CameraAir failed to allow haptics during audio capture: %@", error.localizedDescription)
+        }
     }
 
     private func configureMovieOutput(for mode: CaptureMode) {
