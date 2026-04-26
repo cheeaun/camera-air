@@ -45,6 +45,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private var currentVideoInput: AVCaptureDeviceInput?
     private var currentAudioInput: AVCaptureDeviceInput?
     private var photoCaptureProcessor: PhotoCaptureProcessor?
+    private var recordingAspectRatio: AspectRatioOption?
     private var isConfigured = false
     private var hasPrepared = false
     private var pendingRoute: CameraRoute?
@@ -605,6 +606,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         sessionQueue.async { [weak self] in
             guard let strongSelf = self, strongSelf.isConfigured, !strongSelf.movieOutput.isRecording else { return }
             let outputURL = Self.temporaryFileURL(pathExtension: "mov")
+            strongSelf.recordingAspectRatio = strongSelf.settings.aspectRatio
             strongSelf.applyTorchState(isEnabled: strongSelf.settings.flash == .on)
             strongSelf.movieOutput.startRecording(to: outputURL, recordingDelegate: strongSelf)
             strongSelf.publish {
@@ -1009,6 +1011,8 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
 
     func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
         applyTorchState(isEnabled: false)
+        let aspectRatio = recordingAspectRatio ?? settings.aspectRatio
+        recordingAspectRatio = nil
         publish {
             self.isRecording = false
         }
@@ -1034,11 +1038,18 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
             }
 
             do {
-                let asset = try await Self.saveVideoToLibrary(from: outputFileURL)
-                let thumbnail = try? await Self.makeVideoThumbnail(from: outputFileURL)
+                let videoURL = try await Self.croppedVideoURL(
+                    from: outputFileURL,
+                    aspectRatio: aspectRatio
+                )
+                let asset = try await Self.saveVideoToLibrary(from: videoURL)
+                let thumbnail = try? await Self.makeVideoThumbnail(from: videoURL)
                 strongSelf.updateThumbnail(thumbnail)
                 strongSelf.updateLastCapturedAsset(asset)
                 strongSelf.showTransientToast("Video saved")
+                if videoURL != outputFileURL {
+                    try? FileManager.default.removeItem(at: videoURL)
+                }
             } catch {
                 strongSelf.showTransientError("Unable to save the video.")
             }
@@ -1091,6 +1102,104 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
         generator.appliesPreferredTrackTransform = true
         let result = try await generator.image(at: .zero)
         return UIImage(cgImage: result.image)
+    }
+
+    private static func croppedVideoURL(from url: URL, aspectRatio: AspectRatioOption) async throws -> URL {
+        try await exportCroppedVideo(from: url, targetRatio: aspectRatio.normalized.cropRatio)
+    }
+
+    private static func exportCroppedVideo(from url: URL, targetRatio: CGFloat) async throws -> URL {
+        let asset = AVURLAsset(url: url)
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        guard let videoTrack = tracks.first else { return url }
+
+        let naturalSize = try await videoTrack.load(.naturalSize)
+        let preferredTransform = try await videoTrack.load(.preferredTransform)
+        let transformedBounds = CGRect(origin: .zero, size: naturalSize).applying(preferredTransform)
+        let presentationSize = CGSize(
+            width: abs(transformedBounds.width),
+            height: abs(transformedBounds.height)
+        )
+        guard presentationSize.width > 0, presentationSize.height > 0 else { return url }
+
+        let sourceRatio = presentationSize.width / presentationSize.height
+        guard abs(sourceRatio - targetRatio) > 0.001 else { return url }
+
+        var cropRect = CGRect(origin: .zero, size: presentationSize)
+        if sourceRatio > targetRatio {
+            cropRect.size.width = presentationSize.height * targetRatio
+            cropRect.origin.x = (presentationSize.width - cropRect.width) / 2
+        } else {
+            cropRect.size.height = presentationSize.width / targetRatio
+            cropRect.origin.y = (presentationSize.height - cropRect.height) / 2
+        }
+        cropRect = cropRect.integral
+
+        let composition = AVMutableComposition()
+        guard let compositionVideoTrack = composition.addMutableTrack(
+            withMediaType: .video,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        ) else {
+            return url
+        }
+
+        let duration = try await asset.load(.duration)
+        try compositionVideoTrack.insertTimeRange(
+            CMTimeRange(start: .zero, duration: duration),
+            of: videoTrack,
+            at: .zero
+        )
+
+        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+        for audioTrack in audioTracks {
+            guard let compositionAudioTrack = composition.addMutableTrack(
+                withMediaType: .audio,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+            ) else { continue }
+            try? compositionAudioTrack.insertTimeRange(
+                CMTimeRange(start: .zero, duration: duration),
+                of: audioTrack,
+                at: .zero
+            )
+        }
+
+        let instruction = AVMutableVideoCompositionInstruction()
+        instruction.timeRange = CMTimeRange(start: .zero, duration: duration)
+
+        var normalizedTransform = preferredTransform.concatenating(
+            CGAffineTransform(
+                translationX: -transformedBounds.minX,
+                y: -transformedBounds.minY
+            )
+        )
+        normalizedTransform = normalizedTransform.concatenating(
+            CGAffineTransform(translationX: -cropRect.minX, y: -cropRect.minY)
+        )
+
+        let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionVideoTrack)
+        layerInstruction.setTransform(normalizedTransform, at: .zero)
+        instruction.layerInstructions = [layerInstruction]
+
+        let videoComposition = AVMutableVideoComposition()
+        videoComposition.instructions = [instruction]
+        videoComposition.renderSize = cropRect.size
+        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+
+        let outputURL = temporaryFileURL(pathExtension: "mov")
+        guard let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+            return url
+        }
+        exportSession.videoComposition = videoComposition
+        exportSession.shouldOptimizeForNetworkUse = true
+
+        do {
+            try await exportSession.export(to: outputURL, as: .mov)
+        } catch {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw error
+        }
+
+        return outputURL
     }
 }
 
@@ -1217,8 +1326,23 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
     }
 
     private static func croppedData(from data: Data, aspectRatio: AspectRatioOption) -> Data {
-        // Disable cropping to prevent memory issues
-        return data
+        let normalizedAspectRatio = aspectRatio.normalized
+        guard let image = UIImage(data: data),
+              let croppedImage = crop(normalizedImage(image), to: normalizedAspectRatio.cropRatio),
+              let croppedData = croppedImage.jpegData(compressionQuality: 0.95) else {
+            return data
+        }
+
+        return croppedData
+    }
+
+    private static func normalizedImage(_ image: UIImage) -> UIImage {
+        guard image.imageOrientation != .up else { return image }
+
+        let renderer = UIGraphicsImageRenderer(size: image.size)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+        }
     }
 
     private static func crop(_ image: UIImage, to ratio: CGFloat) -> UIImage? {
