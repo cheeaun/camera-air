@@ -1124,35 +1124,38 @@ private struct AssetGridThumbnail: View {
     @State private var image: UIImage?
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            Group {
-                if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.08))
-                        .overlay {
-                            ProgressView()
-                                .tint(.white.opacity(0.75))
-                        }
+        GeometryReader { geometry in
+            ZStack(alignment: .bottomTrailing) {
+                Group {
+                    if let image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.08))
+                            .overlay {
+                                ProgressView()
+                                    .tint(.white.opacity(0.75))
+                            }
+                    }
+                }
+                .frame(width: geometry.size.width, height: geometry.size.width)
+                .clipped()
+
+                if asset.mediaType == .video {
+                    Text(Self.formattedDuration(asset.duration))
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.85), radius: 2, x: 0, y: 1)
+                        .padding(.trailing, 5)
+                        .padding(.bottom, 4)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .aspectRatio(1, contentMode: .fit)
+            .frame(width: geometry.size.width, height: geometry.size.width)
             .clipped()
-
-            if asset.mediaType == .video {
-                Image(systemName: "video.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(6)
-                    .background(.black.opacity(0.55), in: Capsule())
-                    .padding(6)
-            }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .aspectRatio(1, contentMode: .fit)
         .task(id: asset.localIdentifier) {
             image = await PhotoAssetLoader.image(
                 for: asset,
@@ -1160,6 +1163,19 @@ private struct AssetGridThumbnail: View {
                 contentMode: .aspectFill
             )
         }
+    }
+
+    private static func formattedDuration(_ duration: TimeInterval) -> String {
+        let totalSeconds = max(Int(duration.rounded()), 0)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return "\(hours):\(String(format: "%02d", minutes)):\(String(format: "%02d", seconds))"
+        }
+
+        return "\(minutes):\(String(format: "%02d", seconds))"
     }
 }
 
