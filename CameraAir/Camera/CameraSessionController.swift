@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
 @preconcurrency import Photos
+import ImageIO
 import UIKit
 
 final class CameraSessionController: NSObject, ObservableObject, @unchecked Sendable {
@@ -1204,6 +1205,8 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
 }
 
 private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
+    private static let maxCroppedPhotoDimension = 3_000
+
     private let aspectRatio: AspectRatioOption
     private let livePhotoMovieURL: URL?
     private let onThumbnailReady: @Sendable (UIImage?) -> Void
@@ -1327,26 +1330,28 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
 
     private static func croppedData(from data: Data, aspectRatio: AspectRatioOption) -> Data {
         let normalizedAspectRatio = aspectRatio.normalized
-        guard let image = UIImage(data: data),
-              let croppedImage = crop(normalizedImage(image), to: normalizedAspectRatio.cropRatio),
-              let croppedData = croppedImage.jpegData(compressionQuality: 0.95) else {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions),
+              let image = CGImageSourceCreateThumbnailAtIndex(
+                source,
+                0,
+                [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: maxCroppedPhotoDimension,
+                    kCGImageSourceShouldCacheImmediately: true
+                ] as CFDictionary
+              ),
+              let croppedImage = crop(image, to: normalizedAspectRatio.cropRatio),
+              let croppedData = jpegData(from: croppedImage) else {
             return data
         }
 
         return croppedData
     }
 
-    private static func normalizedImage(_ image: UIImage) -> UIImage {
-        guard image.imageOrientation != .up else { return image }
-
-        let renderer = UIGraphicsImageRenderer(size: image.size)
-        return renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: image.size))
-        }
-    }
-
-    private static func crop(_ image: UIImage, to ratio: CGFloat) -> UIImage? {
-        let sourceSize = image.size
+    private static func crop(_ image: CGImage, to ratio: CGFloat) -> CGImage? {
+        let sourceSize = CGSize(width: image.width, height: image.height)
         guard sourceSize.width > 0, sourceSize.height > 0 else { return nil }
 
         let sourceAspect = sourceSize.width / sourceSize.height
@@ -1362,10 +1367,31 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
             cropRect.size.height = height
         }
 
-        let renderer = UIGraphicsImageRenderer(size: cropRect.size)
-        return renderer.image { _ in
-            image.draw(at: CGPoint(x: -cropRect.origin.x, y: -cropRect.origin.y))
+        return image.cropping(to: cropRect.integral)
+    }
+
+    private static func jpegData(from image: CGImage) -> Data? {
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data,
+            UTType.jpeg.identifier as CFString,
+            1,
+            nil
+        ) else {
+            return nil
         }
+
+        CGImageDestinationAddImage(
+            destination,
+            image,
+            [
+                kCGImageDestinationLossyCompressionQuality: 0.95,
+                kCGImagePropertyOrientation: 1
+            ] as CFDictionary
+        )
+
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return data as Data
     }
 }
 
