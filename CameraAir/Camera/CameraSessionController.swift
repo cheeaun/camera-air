@@ -788,7 +788,19 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private static func anyDeviceSupportsLowLightBoost(_ device: AVCaptureDevice?) -> Bool {
         guard let device else { return false }
         if device.isLowLightBoostSupported { return true }
-        return device.constituentDevices.contains { $0.isLowLightBoostSupported }
+        if !device.constituentDevices.isEmpty {
+            return device.constituentDevices.contains { $0.isLowLightBoostSupported }
+        }
+        // Fallback: discover physical devices directly for this position
+        let deviceTypes: [AVCaptureDevice.DeviceType] = device.position == .front
+            ? [.builtInWideAngleCamera, .builtInTrueDepthCamera]
+            : [.builtInWideAngleCamera, .builtInUltraWideCamera, .builtInTelephotoCamera]
+        let devices = AVCaptureDevice.DiscoverySession(
+            deviceTypes: deviceTypes,
+            mediaType: .video,
+            position: device.position
+        ).devices
+        return devices.contains { $0.isLowLightBoostSupported }
     }
 
     /// Applies `automaticallyEnablesLowLightBoostWhenAvailable` to the device
