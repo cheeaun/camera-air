@@ -666,9 +666,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 }
             }
 
-            if device.isLowLightBoostSupported {
-                device.automaticallyEnablesLowLightBoostWhenAvailable = settings.nightMode != .off
-            }
+            Self.applyLowLightBoost(to: device, enabled: settings.nightMode != .off)
         } catch {
             showTransientError("Unable to update camera settings.")
         }
@@ -755,7 +753,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 hasAudioInput: currentAudioInput != nil,
                 livePhotoSupportOverride: livePhotoSupportOverride
             ),
-            supportsLowLightBoost: device?.isLowLightBoostSupported ?? false,
+            supportsLowLightBoost: Self.anyDeviceSupportsLowLightBoost(device),
             supportsExposureLock: device?.isExposureModeSupported(.locked) ?? false,
             supportedZoomLevels: supportedZoomLevels,
             supportedZoomFactors: supportedZoomFactors,
@@ -781,6 +779,34 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             mediaType: .video,
             position: position
         ).devices.first
+    }
+
+    /// Returns `true` when the device itself or any of its constituent cameras
+    /// supports low-light boost. Virtual multi-camera devices (dual-wide, triple,
+    /// etc.) report `isLowLightBoostSupported == false` even when an underlying
+    /// physical camera does support it.
+    private static func anyDeviceSupportsLowLightBoost(_ device: AVCaptureDevice?) -> Bool {
+        guard let device else { return false }
+        if device.isLowLightBoostSupported { return true }
+        return device.constituentDevices.contains { $0.isLowLightBoostSupported }
+    }
+
+    /// Applies `automaticallyEnablesLowLightBoostWhenAvailable` to the device
+    /// and all of its constituent cameras that support low-light boost. The
+    /// caller must already hold `lockForConfiguration` on `device`.
+    private static func applyLowLightBoost(to device: AVCaptureDevice, enabled: Bool) {
+        if device.isLowLightBoostSupported {
+            device.automaticallyEnablesLowLightBoostWhenAvailable = enabled
+        }
+        for constituent in device.constituentDevices where constituent.isLowLightBoostSupported {
+            do {
+                try constituent.lockForConfiguration()
+                constituent.automaticallyEnablesLowLightBoostWhenAvailable = enabled
+                constituent.unlockForConfiguration()
+            } catch {
+                NSLog("CameraAir failed to configure low-light boost on %@: %@", constituent.localizedName, error.localizedDescription)
+            }
+        }
     }
 
     private func supportedPhysicalZoomFactors(for device: AVCaptureDevice?) -> [CGFloat] {
