@@ -481,18 +481,9 @@ private struct AspectOrientationIcon: View {
         case .portrait:
             return CGSize(width: 12, height: 18)
         case .landscape:
-            return CGSize(width: 18, height: 12)
+            return CGSize(width: 20, height: 12)
         case .square:
             return CGSize(width: 15, height: 15)
-        }
-    }
-
-    private var rotation: Angle {
-        switch orientation {
-        case .portrait, .square:
-            return .degrees(0)
-        case .landscape:
-            return .degrees(90)
         }
     }
 
@@ -500,7 +491,6 @@ private struct AspectOrientationIcon: View {
         RoundedRectangle(cornerRadius: 4, style: .continuous)
             .strokeBorder(.white, lineWidth: 1.8)
             .frame(width: size.width, height: size.height)
-            .rotationEffect(rotation)
     }
 }
 
