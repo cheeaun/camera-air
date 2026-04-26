@@ -461,32 +461,46 @@ private struct AspectRatioControls: View {
             .glassCapsule(interactive: true, isActive: false)
 
             Button(action: onOrientationTap) {
-                orientationIcon
+                AspectOrientationIcon(orientation: orientation)
                     .frame(width: 44, height: 38)
             }
             .buttonStyle(.plain)
             .contentShape(Capsule())
             .glassCapsule(interactive: true, isActive: true)
             .accessibilityLabel(Text("Aspect orientation \(orientation.rawValue)"))
+            .animation(.snappy(duration: 0.25), value: orientation)
+        }
+    }
+}
+
+private struct AspectOrientationIcon: View {
+    let orientation: AspectOrientation
+
+    private var size: CGSize {
+        switch orientation {
+        case .portrait:
+            return CGSize(width: 12, height: 18)
+        case .landscape:
+            return CGSize(width: 18, height: 12)
+        case .square:
+            return CGSize(width: 15, height: 15)
         }
     }
 
-    @ViewBuilder
-    private var orientationIcon: some View {
+    private var rotation: Angle {
         switch orientation {
-        case .portrait:
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .strokeBorder(.white, lineWidth: 1.8)
-                .frame(width: 12, height: 18)
+        case .portrait, .square:
+            return .degrees(0)
         case .landscape:
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .strokeBorder(.white, lineWidth: 1.8)
-                .frame(width: 18, height: 12)
-        case .square:
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .strokeBorder(.white, lineWidth: 1.8)
-                .frame(width: 15, height: 15)
+            return .degrees(90)
         }
+    }
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .strokeBorder(.white, lineWidth: 1.8)
+            .frame(width: size.width, height: size.height)
+            .rotationEffect(rotation)
     }
 }
 
