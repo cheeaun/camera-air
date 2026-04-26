@@ -632,7 +632,7 @@ private struct ZoomFactorSlider: View {
                         .position(x: x, y: trackY - (isMajor ? 3 : 2))
                 }
 
-                if isDragging {
+                if isDragging || !isPresetZoom(value) {
                     Text(formattedZoomLabel)
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(Color(red: 1.0, green: 0.85, blue: 0.0))
@@ -739,6 +739,10 @@ private struct ZoomFactorSlider: View {
 
     private var range: ClosedRange<CGFloat> {
         0.5...10.0
+    }
+
+    private func isPresetZoom(_ zoom: CGFloat) -> Bool {
+        presetFactors.contains { abs($0 - zoom) < 0.01 }
     }
 
     private func currentLabelX(in width: CGFloat) -> CGFloat {
