@@ -211,12 +211,12 @@ struct CameraRootView: View {
                 isRatioEnabled: !controller.settings.aspectOrientation.isSquare,
                 orientation: controller.settings.aspectOrientation,
                 onRatioTap: {
-                    triggerInterfaceHaptic()
                     controller.cycleAspectRatio()
+                    triggerInterfaceHaptic()
                 },
                 onOrientationTap: {
-                    triggerInterfaceHaptic()
                     controller.cycleAspectOrientation()
+                    triggerInterfaceHaptic()
                 }
             )
 
@@ -457,6 +457,7 @@ private struct AspectRatioControls: View {
             }
             .buttonStyle(.plain)
             .disabled(!isRatioEnabled)
+            .contentShape(Capsule())
             .glassCapsule(interactive: true, isActive: false)
 
             Button(action: onOrientationTap) {
@@ -464,6 +465,7 @@ private struct AspectRatioControls: View {
                     .frame(width: 44, height: 38)
             }
             .buttonStyle(.plain)
+            .contentShape(Capsule())
             .glassCapsule(interactive: true, isActive: true)
             .accessibilityLabel(Text("Aspect orientation \(orientation.rawValue)"))
         }

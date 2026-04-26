@@ -51,8 +51,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private var hasPrepared = false
     private var pendingRoute: CameraRoute?
     private var isOpeningCapture = false
-    private var pendingOrientationAfterSquare: AspectOrientation?
-    private var pendingAspectRatioAfterSquare: AspectRatioOption?
 
     private let displayZoomCeiling: CGFloat = 10.0
     private let livePhotoSupportOverride: Bool?
@@ -321,19 +319,13 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         switch currentOrientation {
         case .portrait:
             nextOrientation = .square
-            pendingOrientationAfterSquare = .landscape
-            pendingAspectRatioAfterSquare = settings.aspectRatio.paired(for: .landscape)
             nextAspectRatio = .square
         case .square:
-            nextOrientation = pendingOrientationAfterSquare ?? .landscape
-            nextAspectRatio = pendingAspectRatioAfterSquare ?? nextOrientation.defaultAspectRatio
-            pendingOrientationAfterSquare = nil
-            pendingAspectRatioAfterSquare = nil
+            nextOrientation = .landscape
+            nextAspectRatio = settings.aspectRatio.paired(for: nextOrientation)
         case .landscape:
-            nextOrientation = .square
-            pendingOrientationAfterSquare = .portrait
-            pendingAspectRatioAfterSquare = settings.aspectRatio.paired(for: .portrait)
-            nextAspectRatio = .square
+            nextOrientation = .portrait
+            nextAspectRatio = settings.aspectRatio.paired(for: nextOrientation)
         }
 
         publish {
