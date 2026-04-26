@@ -107,10 +107,6 @@ struct CameraRootView: View {
         .sheet(isPresented: $controller.isRecentCapturesPresented) {
             RecentCapturesView(
                 assets: controller.recentCaptureAssets,
-                onSelectAsset: { asset in
-                    controller.dismissRecentCaptures()
-                    controller.openCapture(asset)
-                },
                 onDismiss: {
                     controller.dismissRecentCaptures()
                 }
@@ -1049,15 +1045,15 @@ extension PHAsset: @retroactive Identifiable {}
 
 private struct RecentCapturesView: View {
     let assets: [PHAsset]
-    let onSelectAsset: (PHAsset) -> Void
     let onDismiss: () -> Void
 
     @State private var isLibraryPickerPresented = false
+    @State private var selectedAsset: PHAsset?
 
     private let gridColumns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8)
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2)
     ]
 
     var body: some View {
@@ -1071,18 +1067,17 @@ private struct RecentCapturesView: View {
                     )
                 } else {
                     ScrollView {
-                        LazyVGrid(columns: gridColumns, spacing: 8) {
+                        LazyVGrid(columns: gridColumns, spacing: 2) {
                             ForEach(assets) { asset in
                                 Button {
                                     CameraHaptics.interface()
-                                    onSelectAsset(asset)
+                                    selectedAsset = asset
                                 } label: {
                                     AssetGridThumbnail(asset: asset)
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
-                        .padding(12)
                     }
                     .background(Color.black.opacity(0.0001))
                 }
@@ -1091,22 +1086,33 @@ private struct RecentCapturesView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") {
+                    Button {
                         CameraHaptics.interface()
                         onDismiss()
+                    } label: {
+                        Image(systemName: "checkmark")
                     }
+                    .accessibilityLabel("Done")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Browse All Photos") {
+                    Button {
                         CameraHaptics.interface()
                         isLibraryPickerPresented = true
+                    } label: {
+                        Image(systemName: "photo.stack")
                     }
+                    .accessibilityLabel("Browse Photos")
                 }
             }
         }
         .sheet(isPresented: $isLibraryPickerPresented) {
             LibraryPickerView { asset in
-                onSelectAsset(asset)
+                selectedAsset = asset
+            }
+        }
+        .fullScreenCover(item: $selectedAsset) { asset in
+            CaptureViewer(asset: asset) {
+                selectedAsset = nil
             }
         }
     }
@@ -1148,7 +1154,11 @@ private struct AssetGridThumbnail: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .task(id: asset.localIdentifier) {
-            image = await PhotoAssetLoader.image(for: asset, targetSize: CGSize(width: 360, height: 360))
+            image = await PhotoAssetLoader.image(
+                for: asset,
+                targetSize: CGSize(width: 360, height: 360),
+                contentMode: .aspectFill
+            )
         }
     }
 }
@@ -1196,9 +1206,27 @@ private struct CaptureViewer: View {
     @State private var image: UIImage?
     @State private var player: AVPlayer?
     @State private var errorMessage: String?
+    @State private var dragOffset: CGFloat = 0
 
     private var preferredTargetSize: CGSize {
         CGSize(width: 2048, height: 2048) // Limit to 2048x2048 to prevent memory issues
+    }
+
+    private var dismissDrag: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                dragOffset = max(value.translation.height, 0)
+            }
+            .onEnded { value in
+                if value.translation.height > 120 || value.predictedEndTranslation.height > 220 {
+                    CameraHaptics.interface()
+                    onDismiss()
+                } else {
+                    withAnimation(.snappy(duration: 0.2)) {
+                        dragOffset = 0
+                    }
+                }
+            }
     }
 
     var body: some View {
@@ -1236,24 +1264,29 @@ private struct CaptureViewer: View {
                 }
             }
 
-            VStack {
-                HStack {
-                    Spacer()
-                    Button {
-                        CameraHaptics.interface()
-                        onDismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 30))
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.white.opacity(0.7))
+            if asset.mediaType != .video {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button {
+                            CameraHaptics.interface()
+                            onDismiss()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 30))
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
                     }
+                    .padding(.trailing, 18)
+                    .padding(.top, 10)
+                    Spacer()
                 }
-                .padding(.trailing, 18)
-                .padding(.top, 10)
-                Spacer()
             }
         }
+        .offset(y: dragOffset)
+        .opacity(1 - min(dragOffset / 600, 0.35))
+        .gesture(dismissDrag)
         .task {
             await loadAsset()
         }
@@ -1316,7 +1349,11 @@ private enum PhotoAssetLoader {
         return wrapper.asset
     }
 
-    static func image(for asset: PHAsset, targetSize: CGSize) async -> UIImage? {
+    static func image(
+        for asset: PHAsset,
+        targetSize: CGSize,
+        contentMode: PHImageContentMode = .aspectFit
+    ) async -> UIImage? {
         let options = PHImageRequestOptions()
         options.isSynchronous = false
         options.isNetworkAccessAllowed = true
@@ -1328,7 +1365,7 @@ private enum PhotoAssetLoader {
             PHImageManager.default().requestImage(
                 for: asset,
                 targetSize: targetSize,
-                contentMode: .aspectFit,
+                contentMode: contentMode,
                 options: options
             ) { image, info in
                 let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
