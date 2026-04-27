@@ -236,10 +236,10 @@ struct CameraRootView: View {
             if controller.mode == .photo {
                 NightModeMenu(
                     selection: controller.settings.nightMode,
-                    nightModeDuration: controller.nightModeMaxExposureDuration,
                     onSelect: { mode in
                         controller.setNightMode(mode)
-                    }
+                    },
+                    nightModeDuration: controller.nightModeMaxExposureDuration
                 )
 
                 ToggleChip(
