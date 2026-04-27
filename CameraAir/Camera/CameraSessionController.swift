@@ -834,13 +834,11 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         return false
     }
 
-    /// Returns true if the device currently reports low-light boost support, or
-    /// if any of its available formats advertises `isVideoLowLightBoostSupported`.
-    /// On iOS 26 the device-level flag depends on the active format, so checking
-    /// the formats array gives a more reliable capability signal.
+    /// Returns true if the device or any of its constituents supports low-light boost.
+    /// On iOS 26 `isLowLightBoostSupported` reflects the active format, so this
+    /// must be re-queried after the session has started running.
     private static func deviceOrFormatsSupportLowLightBoost(_ device: AVCaptureDevice) -> Bool {
-        if device.isLowLightBoostSupported { return true }
-        return device.formats.contains(where: { $0.isVideoLowLightBoostSupported })
+        device.isLowLightBoostSupported
     }
 
     private func discoverDevice(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
