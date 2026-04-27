@@ -270,23 +270,13 @@ struct CameraRootView: View {
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white.opacity(0.8))
 
-                    if controller.capabilities.supportsLowLightBoost {
-                        OptionStrip(
-                            title: "Low Light Boost",
-                            options: NightModePreference.allCases,
-                            selection: controller.settings.nightMode,
-                            label: \.title
-                        ) { option in
-                            controller.setNightMode(option)
-                        }
-                    } else {
-                        HStack(spacing: 8) {
-                            Image(systemName: "info.circle")
-                            Text("Not supported on this device. Night Mode is handled automatically by the camera system.")
-                        }
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.5))
-                        .padding(.vertical, 4)
+                    OptionStrip(
+                        title: "Low Light Boost",
+                        options: NightModePreference.allCases,
+                        selection: controller.settings.nightMode,
+                        label: \.title
+                    ) { option in
+                        controller.setNightMode(option)
                     }
                 }
             }

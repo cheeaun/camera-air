@@ -753,7 +753,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 hasAudioInput: currentAudioInput != nil,
                 livePhotoSupportOverride: livePhotoSupportOverride
             ),
-            supportsLowLightBoost: Self.anyDeviceSupportsLowLightBoost(device),
+            supportsLowLightBoost: true,
             supportsExposureLock: device?.isExposureModeSupported(.locked) ?? false,
             supportedZoomLevels: supportedZoomLevels,
             supportedZoomFactors: supportedZoomFactors,
@@ -779,28 +779,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             mediaType: .video,
             position: position
         ).devices.first
-    }
-
-    /// Returns `true` when the device itself or any of its constituent cameras
-    /// supports low-light boost. Virtual multi-camera devices (dual-wide, triple,
-    /// etc.) report `isLowLightBoostSupported == false` even when an underlying
-    /// physical camera does support it.
-    private static func anyDeviceSupportsLowLightBoost(_ device: AVCaptureDevice?) -> Bool {
-        guard let device else { return false }
-        if device.isLowLightBoostSupported { return true }
-        if !device.constituentDevices.isEmpty {
-            return device.constituentDevices.contains { $0.isLowLightBoostSupported }
-        }
-        // Fallback: discover physical devices directly for this position
-        let deviceTypes: [AVCaptureDevice.DeviceType] = device.position == .front
-            ? [.builtInWideAngleCamera, .builtInTrueDepthCamera]
-            : [.builtInWideAngleCamera, .builtInUltraWideCamera, .builtInTelephotoCamera]
-        let devices = AVCaptureDevice.DiscoverySession(
-            deviceTypes: deviceTypes,
-            mediaType: .video,
-            position: device.position
-        ).devices
-        return devices.contains { $0.isLowLightBoostSupported }
     }
 
     /// Applies `automaticallyEnablesLowLightBoostWhenAvailable` to the device
