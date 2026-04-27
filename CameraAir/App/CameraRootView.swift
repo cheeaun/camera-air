@@ -234,24 +234,7 @@ struct CameraRootView: View {
             }
 
             if controller.mode == .photo {
-                ToggleChip(
-                    accessibilityLabel: controller.settings.nightMode == .off ? "Night mode off" : "Night mode",
-                    icon: "moon.dust",
-                    iconView: { _ in
-                        AnyView(
-                            NightModeIcon(
-                                mode: controller.settings.nightMode,
-                                durationText: controller.nightModeMaxExposureDuration.map { Int($0.rounded()) }.map { "\($0)" }
-                            )
-                        )
-                    },
-                    isOn: controller.settings.nightMode != .off,
-                    isEnabled: controller.capabilities.supportsLowLightBoost
-                ) {
-                    triggerInterfaceHaptic()
-                    controller.cycleNightMode()
-                }
-                .contextMenu {
+                Menu {
                     ForEach(NightModePreference.allCases) { option in
                         Button {
                             CameraHaptics.interface()
@@ -264,7 +247,21 @@ struct CameraRootView: View {
                             }
                         }
                     }
+                } label: {
+                    NightModeIcon(
+                        mode: controller.settings.nightMode,
+                        durationText: controller.nightModeMaxExposureDuration.map { Int($0.rounded()) }.map { "\($0)" }
+                    )
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 38)
+                    .glassCapsule(interactive: true, isActive: controller.settings.nightMode != .off)
+                    .accessibilityLabel(Text(controller.settings.nightMode == .off ? "Night mode off" : "Night mode"))
+                } primaryAction: {
+                    triggerInterfaceHaptic()
+                    controller.cycleNightMode()
                 }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
 
                 ToggleChip(
                     accessibilityLabel: "Live photo",
