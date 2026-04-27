@@ -360,10 +360,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func cycleNightMode() {
-        // Debug: show toast/log when the chip is tapped so we can verify the tap reaches the controller.
-        NSLog("CameraAir: cycleNightMode invoked")
-        showTransientToast("Night mode tapped")
-
         // Cycle between auto and off only (not max)
         if settings.nightMode == .off {
             setNightMode(.auto)
@@ -701,6 +697,13 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
 
         applyZoomSettings(animated: false)
+
+        // Re-query capabilities after the session/active format is settled.
+        // On iOS 26, low-light boost support depends on the active format,
+        // which may not be finalized until the session has started running.
+        DispatchQueue.main.async { [weak self] in
+            self?.refreshCapabilities()
+        }
     }
 
     private func configureAudioSessionForHapticsDuringRecording() {
@@ -801,8 +804,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private static func deviceSupportsLowLightBoost(_ device: AVCaptureDevice?) -> Bool {
         // Prefer checking the provided device (active camera) and its constituents.
         if let device {
-            if device.isLowLightBoostSupported { return true }
-            for constituent in device.constituentDevices where constituent.isLowLightBoostSupported {
+            if Self.deviceOrFormatsSupportLowLightBoost(device) { return true }
+            for constituent in device.constituentDevices
+            where Self.deviceOrFormatsSupportLowLightBoost(constituent) {
                 return true
             }
             return false
@@ -820,13 +824,23 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         ).devices
 
         for backDevice in backDevices {
-            if backDevice.isLowLightBoostSupported { return true }
-            for constituent in backDevice.constituentDevices where constituent.isLowLightBoostSupported {
+            if Self.deviceOrFormatsSupportLowLightBoost(backDevice) { return true }
+            for constituent in backDevice.constituentDevices
+            where Self.deviceOrFormatsSupportLowLightBoost(constituent) {
                 return true
             }
         }
 
         return false
+    }
+
+    /// Returns true if the device currently reports low-light boost support, or
+    /// if any of its available formats advertises `isVideoLowLightBoostSupported`.
+    /// On iOS 26 the device-level flag depends on the active format, so checking
+    /// the formats array gives a more reliable capability signal.
+    private static func deviceOrFormatsSupportLowLightBoost(_ device: AVCaptureDevice) -> Bool {
+        if device.isLowLightBoostSupported { return true }
+        return device.formats.contains(where: { $0.isVideoLowLightBoostSupported })
     }
 
     private func discoverDevice(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
