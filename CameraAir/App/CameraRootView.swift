@@ -251,6 +251,13 @@ struct CameraRootView: View {
                     triggerInterfaceHaptic()
                     controller.cycleNightMode()
                 }
+                .highPriorityGesture(
+                    TapGesture().onEnded {
+                        guard controller.capabilities.supportsLowLightBoost else { return }
+                        triggerInterfaceHaptic()
+                        controller.cycleNightMode()
+                    }
+                )
                 .contextMenu {
                     ForEach(NightModePreference.allCases) { option in
                         Button {
