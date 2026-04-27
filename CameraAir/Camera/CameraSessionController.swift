@@ -360,6 +360,10 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func cycleNightMode() {
+        // Debug: show toast/log when the chip is tapped so we can verify the tap reaches the controller.
+        NSLog("CameraAir: cycleNightMode invoked")
+        showTransientToast("Night mode tapped")
+
         // Cycle between auto and off only (not max)
         if settings.nightMode == .off {
             setNightMode(.auto)
