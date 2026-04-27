@@ -234,6 +234,14 @@ struct CameraRootView: View {
             }
 
             if controller.mode == .photo {
+                NightModeMenu(
+                    selection: controller.settings.nightMode,
+                    nightModeDuration: controller.nightModeMaxExposureDuration,
+                    onSelect: { mode in
+                        controller.setNightMode(mode)
+                    }
+                )
+
                 ToggleChip(
                     accessibilityLabel: "Live photo",
                     icon: controller.settings.isLivePhotoEnabled ? "livephoto" : "livephoto.slash",
@@ -245,6 +253,14 @@ struct CameraRootView: View {
                         controller.toggleLivePhoto()
                     }
                 }
+
+                FlashMenu(
+                    selection: controller.settings.flash,
+                    isEnabled: controller.capabilities.hasFlash,
+                    onSelect: { flash in
+                        controller.setFlash(flash)
+                    }
+                )
             }
 
             Spacer(minLength: 0)
@@ -262,25 +278,13 @@ struct CameraRootView: View {
         .padding(.horizontal, 18)
     }
 
-    private var settingsPanel: some View {
+private var settingsPanel: some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Low Light Boost", systemImage: "moon.haze")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.8))
-
-                    OptionStrip(
-                        title: "Low Light Boost",
-                        options: NightModePreference.allCases,
-                        selection: controller.settings.nightMode,
-                        label: \.title
-                    ) { option in
-                        controller.setNightMode(option)
-                    }
-                }
+                // Night mode is now in the toggle chips
             }
         }
+        .padding(.horizontal, 18)
     }
 
     private var bottomBar: some View {
@@ -845,13 +849,95 @@ private struct FlashMenu: View {
             }
         } label: {
             Image(systemName: selection.systemImage)
-            .font(.system(size: 13, weight: .semibold, design: .rounded))
-            .foregroundStyle(isEnabled ? .white : .white.opacity(0.44))
-            .frame(width: 44, height: 38)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(isEnabled ? .white : .white.opacity(0.44))
+                .frame(width: 44, height: 38)
         }
         .disabled(!isEnabled)
         .glassCapsule(interactive: true)
         .accessibilityLabel(Text("Flash \(selection.title)"))
+    }
+}
+
+private struct NightModeMenu: View {
+    let selection: NightModePreference
+    let onSelect: (NightModePreference) -> Void
+    var nightModeDuration: Double?
+
+    private func cycleMode() {
+        // After selecting max from menu, tap goes to off first, then normal cycle: off <-> auto
+        if selection == .max {
+            onSelect(.off)
+        } else {
+            // Normal cycle: off <-> auto
+            if selection == .off {
+                onSelect(.auto)
+            } else {
+                onSelect(.off)
+            }
+        }
+    }
+
+    private var durationText: String? {
+        guard let duration = nightModeDuration, duration > 1 else { return nil }
+        let seconds = Int(duration.rounded())
+        return "\(seconds)"
+    }
+
+    var body: some View {
+        Button {
+            cycleMode()
+        } label: {
+            NightModeIcon(mode: selection, durationText: durationText)
+        }
+        .contextMenu {
+            ForEach(NightModePreference.allCases) { option in
+                Button {
+                    CameraHaptics.interface()
+                    onSelect(option)
+                } label: {
+                    if option == selection {
+                        Label(option.title, systemImage: "checkmark")
+                    } else {
+                        Text(option.title)
+                    }
+                }
+            }
+        }
+        .glassCapsule(interactive: true)
+        .accessibilityLabel(Text("Night Mode \(selection.title)"))
+    }
+}
+
+private struct NightModeIcon: View {
+    let mode: NightModePreference
+    var durationText: String?
+
+    var body: some View {
+        ZStack {
+            Image(systemName: "moon.dust")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(mode == .off ? .white.opacity(0.5) : .white)
+            modeOverlay
+        }
+    }
+
+    @ViewBuilder
+    private var modeOverlay: some View {
+        switch mode {
+        case .off:
+            Image(systemName: "slash")
+                .font(.system(size: 8, weight: .bold, design: .rounded))
+                .offset(x: 5, y: -4)
+        case .auto:
+            EmptyView()
+        case .max:
+            if let durationText {
+                Text(durationText)
+                    .font(.system(size: 8, weight: .bold, design: .rounded))
+                    .offset(x: 5, y: -4)
+            }
+        }
     }
 }
 

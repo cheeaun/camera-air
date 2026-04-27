@@ -247,8 +247,8 @@ enum AspectOrientation: String, CaseIterable, Identifiable, Codable {
 }
 
 enum NightModePreference: String, CaseIterable, Identifiable, Codable {
+    case max
     case auto
-    case on
     case off
 
     var id: String { rawValue }
@@ -256,6 +256,8 @@ enum NightModePreference: String, CaseIterable, Identifiable, Codable {
     var title: String {
         rawValue.capitalized
     }
+
+    static var cyclingOrder: [NightModePreference] { [.max, .auto, .off] }
 }
 
 enum ZoomLevel: String, CaseIterable, Identifiable, Codable {
@@ -296,7 +298,7 @@ struct CameraSettings: Equatable, Codable {
     var isExposureLocked = false
     var aspectRatio: AspectRatioOption = .portrait34
     var aspectOrientation: AspectOrientation = .portrait
-    var nightMode: NightModePreference = .auto
+    var nightMode: NightModePreference = .max
     var zoomLevel: ZoomLevel = .standard
     var customZoomFactor: CGFloat = 1.0
 

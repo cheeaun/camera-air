@@ -344,10 +344,25 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
         saveSettings()
         triggerSelectionFeedback()
-        showTransientToast("Low Light Boost \(nightMode.title.lowercased())")
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
         }
+    }
+
+    func cycleNightMode() {
+        // Cycle between auto and off only (not max)
+        if settings.nightMode == .off {
+            setNightMode(.auto)
+        } else {
+            setNightMode(.off)
+        }
+    }
+
+    /// Returns the maximum exposure duration for night mode in seconds, or nil if not available
+    var nightModeMaxExposureDuration: Double? {
+        guard let device = currentVideoInput?.device else { return nil }
+        let maxDuration = device.activeFormat.maxExposureDuration
+        return CMTimeGetSeconds(maxDuration)
     }
 
     func setZoomLevel(_ zoomLevel: ZoomLevel) {
@@ -753,7 +768,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 hasAudioInput: currentAudioInput != nil,
                 livePhotoSupportOverride: livePhotoSupportOverride
             ),
-            supportsLowLightBoost: true,
+            supportsLowLightBoost: Self.deviceSupportsLowLightBoost(device),
             supportsExposureLock: device?.isExposureModeSupported(.locked) ?? false,
             supportedZoomLevels: supportedZoomLevels,
             supportedZoomFactors: supportedZoomFactors,
@@ -767,6 +782,27 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             self.settings.customZoomFactor = normalizedZoomFactor
             self.settings.zoomLevel = self.closestZoomLevel(for: normalizedZoomFactor)
         }
+    }
+
+    private static func deviceSupportsLowLightBoost(_ device: AVCaptureDevice?) -> Bool {
+        // Check the back camera specifically (not the currently active camera)
+        let deviceTypes: [AVCaptureDevice.DeviceType] = [
+            .builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera,
+            .builtInWideAngleCamera, .builtInUltraWideCamera, .builtInTelephotoCamera
+        ]
+        let backDevices = AVCaptureDevice.DiscoverySession(
+            deviceTypes: deviceTypes,
+            mediaType: .video,
+            position: .back
+        ).devices
+
+        for backDevice in backDevices {
+            if backDevice.isLowLightBoostSupported { return true }
+            for constituent in backDevice.constituentDevices where constituent.isLowLightBoostSupported {
+                return true
+            }
+        }
+        return false
     }
 
     private func discoverDevice(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
