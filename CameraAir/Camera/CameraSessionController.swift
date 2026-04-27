@@ -344,6 +344,16 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
         saveSettings()
         triggerSelectionFeedback()
+        // Show toast similar to other toggle controls
+        if nightMode == .max {
+            if let seconds = nightModeMaxExposureDuration, seconds > 1 {
+                showTransientToast("Night mode \(Int(seconds.rounded()))s")
+            } else {
+                showTransientToast("Night mode on")
+            }
+        } else {
+            showTransientToast("Night mode \(nightMode.title.lowercased())")
+        }
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
         }

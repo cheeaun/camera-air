@@ -234,13 +234,37 @@ struct CameraRootView: View {
             }
 
             if controller.mode == .photo {
-                NightModeMenu(
-                    selection: controller.settings.nightMode,
-                    onSelect: { mode in
-                        controller.setNightMode(mode)
+                ToggleChip(
+                    accessibilityLabel: controller.settings.nightMode == .off ? "Night mode off" : "Night mode",
+                    icon: "moon.dust",
+                    iconView: { _ in
+                        AnyView(
+                            NightModeIcon(
+                                mode: controller.settings.nightMode,
+                                durationText: controller.nightModeMaxExposureDuration.map { Int($0.rounded()) }.map { "\($0)" }
+                            )
+                        )
                     },
-                    nightModeDuration: controller.nightModeMaxExposureDuration
-                )
+                    isOn: controller.settings.nightMode != .off,
+                    isEnabled: controller.capabilities.supportsLowLightBoost
+                ) {
+                    triggerInterfaceHaptic()
+                    controller.cycleNightMode()
+                }
+                .contextMenu {
+                    ForEach(NightModePreference.allCases) { option in
+                        Button {
+                            CameraHaptics.interface()
+                            controller.setNightMode(option)
+                        } label: {
+                            if option == controller.settings.nightMode {
+                                Label(option.title, systemImage: "checkmark")
+                            } else {
+                                Text(option.title)
+                            }
+                        }
+                    }
+                }
 
                 ToggleChip(
                     accessibilityLabel: "Live photo",
@@ -253,14 +277,6 @@ struct CameraRootView: View {
                         controller.toggleLivePhoto()
                     }
                 }
-
-                FlashMenu(
-                    selection: controller.settings.flash,
-                    isEnabled: controller.capabilities.hasFlash,
-                    onSelect: { flash in
-                        controller.setFlash(flash)
-                    }
-                )
             }
 
             Spacer(minLength: 0)
@@ -859,55 +875,7 @@ private struct FlashMenu: View {
     }
 }
 
-private struct NightModeMenu: View {
-    let selection: NightModePreference
-    let onSelect: (NightModePreference) -> Void
-    var nightModeDuration: Double?
 
-    private func cycleMode() {
-        // After selecting max from menu, tap goes to off first, then normal cycle: off <-> auto
-        if selection == .max {
-            onSelect(.off)
-        } else {
-            // Normal cycle: off <-> auto
-            if selection == .off {
-                onSelect(.auto)
-            } else {
-                onSelect(.off)
-            }
-        }
-    }
-
-    private var durationText: String? {
-        guard let duration = nightModeDuration, duration > 1 else { return nil }
-        let seconds = Int(duration.rounded())
-        return "\(seconds)"
-    }
-
-    var body: some View {
-        Button {
-            cycleMode()
-        } label: {
-            NightModeIcon(mode: selection, durationText: durationText)
-        }
-        .contextMenu {
-            ForEach(NightModePreference.allCases) { option in
-                Button {
-                    CameraHaptics.interface()
-                    onSelect(option)
-                } label: {
-                    if option == selection {
-                        Label(option.title, systemImage: "checkmark")
-                    } else {
-                        Text(option.title)
-                    }
-                }
-            }
-        }
-        .glassCapsule(interactive: true)
-        .accessibilityLabel(Text("Night Mode \(selection.title)"))
-    }
-}
 
 private struct NightModeIcon: View {
     let mode: NightModePreference
@@ -926,15 +894,25 @@ private struct NightModeIcon: View {
     private var modeOverlay: some View {
         switch mode {
         case .off:
-            Image(systemName: "slash")
-                .font(.system(size: 8, weight: .bold, design: .rounded))
-                .offset(x: 5, y: -4)
+            ZStack {
+                Circle()
+                    .fill(Color.black.opacity(0.65))
+                    .frame(width: 14, height: 14)
+                Image(systemName: "slash")
+                    .font(.system(size: 8, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+            }
+            .offset(x: 5, y: -4)
         case .auto:
             EmptyView()
         case .max:
             if let durationText {
                 Text(durationText)
                     .font(.system(size: 8, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.65), in: Capsule())
                     .offset(x: 5, y: -4)
             }
         }
