@@ -795,7 +795,16 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private static func deviceSupportsLowLightBoost(_ device: AVCaptureDevice?) -> Bool {
-        // Check the back camera specifically (not the currently active camera)
+        // Prefer checking the provided device (active camera) and its constituents.
+        if let device {
+            if device.isLowLightBoostSupported { return true }
+            for constituent in device.constituentDevices where constituent.isLowLightBoostSupported {
+                return true
+            }
+            return false
+        }
+
+        // Fallback: check available back cameras for low-light boost support.
         let deviceTypes: [AVCaptureDevice.DeviceType] = [
             .builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera,
             .builtInWideAngleCamera, .builtInUltraWideCamera, .builtInTelephotoCamera
@@ -812,6 +821,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 return true
             }
         }
+
         return false
     }
 
