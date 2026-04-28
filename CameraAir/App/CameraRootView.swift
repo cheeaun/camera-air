@@ -895,9 +895,11 @@ private struct NightModeIcon: View {
                 Circle()
                     .fill(Color.black.opacity(0.65))
                     .frame(width: 14, height: 14)
-                Image(systemName: "slash")
-                    .font(.system(size: 8, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                // Draw a small diagonal stroke so the slash is always visible
+                Capsule()
+                    .fill(Color.white)
+                    .frame(width: 10, height: 2)
+                    .rotationEffect(.degrees(45))
             }
             .offset(x: 5, y: -4)
         case .auto:
