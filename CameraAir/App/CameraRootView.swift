@@ -248,16 +248,22 @@ struct CameraRootView: View {
                         }
                     }
                 } label: {
-                        NightModeIcon(
-                            mode: controller.settings.nightMode,
-                            durationText: controller.nightModeMaxExposureDuration.map { Int($0.rounded()) }.map { "\($0)" }
-                        )
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 38)
-                        .contentShape(Capsule())
-                        .glassCapsule(interactive: true, isActive: controller.settings.nightMode != .off)
-                        .compositingGroup()
-                        .accessibilityLabel(Text(controller.settings.nightMode == .off ? "Night mode off" : "Night mode"))
+                    let durationText: String? = {
+                        if let est = controller.nightModeEstimatedSeconds { return "\(est)" }
+                        if let max = controller.nightModeMaxExposureDuration { return "\(Int(max.rounded()))" }
+                        return nil
+                    }()
+
+                    NightModeIcon(
+                        mode: controller.settings.nightMode,
+                        durationText: durationText
+                    )
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 38)
+                    .contentShape(Capsule())
+                    .glassCapsule(interactive: true, isActive: controller.settings.nightMode != .off)
+                    .compositingGroup()
+                    .accessibilityLabel(Text(controller.settings.nightMode == .off ? "Night mode off" : "Night mode"))
                 } primaryAction: {
                     triggerInterfaceHaptic()
                     controller.cycleNightMode()

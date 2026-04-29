@@ -18,6 +18,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     @Published private(set) var lastCapturedAsset: PHAsset?
     @Published var errorMessage: String?
     @Published var toastMessage: String?
+    // Estimated night-mode exposure in seconds (polled from device.exposureDuration)
+    @Published var nightModeEstimatedSeconds: Int?
 
     let session = AVCaptureSession()
 
@@ -42,6 +44,10 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     private var recordingStartTime: Date?
     private var recordingTimer: Timer?
+    
+    // Timer used to poll the current device exposureDuration to estimate
+    // how many seconds Night mode would require. This is Option A (cheap).
+    private var exposurePollTimer: Timer?
 
     private var currentVideoInput: AVCaptureDeviceInput?
     private var currentAudioInput: AVCaptureDeviceInput?
@@ -162,6 +168,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             guard let strongSelf = self, strongSelf.isConfigured, !strongSelf.session.isRunning else { return }
             strongSelf.session.startRunning()
             strongSelf.startRecordingIfNeeded()
+            DispatchQueue.main.async { [weak self] in
+                self?.startExposurePolling()
+            }
         }
     }
 
@@ -174,6 +183,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             strongSelf.session.stopRunning()
         }
         stopRecordingTimer()
+        stopExposurePolling()
     }
 
     func setMode(_ mode: CaptureMode) {
@@ -242,6 +252,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             }
             strongSelf.applyCaptureSettings()
             strongSelf.saveSettings()
+            strongSelf.startExposurePolling()
             strongSelf.startRecordingIfNeeded()
         }
     }
@@ -504,6 +515,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 strongSelf.refreshCapabilities()
                 strongSelf.applyCaptureSettings()
+                strongSelf.startExposurePolling()
             }
             strongSelf.startRecordingIfNeeded()
         }
@@ -982,6 +994,41 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak self] in
             guard self?.toastMessage == message else { return }
             self?.toastMessage = nil
+        }
+    }
+
+    // MARK: - Exposure polling (Option A)
+
+    private func startExposurePolling(interval: TimeInterval = 0.5) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.stopExposurePolling()
+            self.exposurePollTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+                guard let self = self else { return }
+                self.sessionQueue.async { [weak self] in
+                    guard let self = self, let device = self.currentVideoInput?.device else { return }
+                    let cur = CMTimeGetSeconds(device.exposureDuration)
+                    let maxDur = CMTimeGetSeconds(device.activeFormat.maxExposureDuration)
+                    var est = Int(Swift.max(1.0, round(cur)))
+                    if est > Int(maxDur) { est = Int(maxDur) }
+                    if self.nightModeEstimatedSeconds != est {
+                        let finalEst = est
+                        self.publish { self.nightModeEstimatedSeconds = finalEst }
+                    }
+                }
+            }
+            if let timer = self.exposurePollTimer {
+                RunLoop.main.add(timer, forMode: .common)
+            }
+        }
+    }
+
+    private func stopExposurePolling() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.exposurePollTimer?.invalidate()
+            self.exposurePollTimer = nil
+            self.publish { self.nightModeEstimatedSeconds = nil }
         }
     }
 
