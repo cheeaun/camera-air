@@ -1,5 +1,3 @@
-@RTK.md
-
 # Camera Air
 
 iOS SwiftUI camera app (iOS 26.0+, Xcode 17.0+).
@@ -43,3 +41,37 @@ Use `skill` tool to load any of these skills when working on related tasks.
 ## Guidelines
 
 - DO NOT auto-commit and push changes. Only commit when explicitly requested by the user.
+
+## RTK - Rust Token Killer (Codex CLI)
+
+**Usage**: Token-optimized CLI proxy for shell commands.
+
+### Rule
+
+Always prefix shell commands with `rtk`, except `xcodebuild`.
+
+Examples:
+
+```bash
+rtk git status
+rtk cargo test
+rtk npm run build
+rtk pytest -q
+xcodebuild -scheme CameraAir -destination 'platform=iOS Simulator,name=iPhone 13 mini' build
+```
+
+### Meta Commands
+
+```bash
+rtk gain            # Token savings analytics
+rtk gain --history  # Recent command savings history
+rtk proxy <cmd>     # Run raw command without filtering
+```
+
+### Verification
+
+```bash
+rtk --version
+rtk gain
+which rtk
+```

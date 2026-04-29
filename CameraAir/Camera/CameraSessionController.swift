@@ -1169,62 +1169,33 @@ extension CameraSessionController: AVCaptureVideoDataOutputSampleBufferDelegate 
         }
         lastNightModeSampleTimestamp = now
 
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-
-        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
-
-        let width = CVPixelBufferGetWidth(pixelBuffer)
-        let height = CVPixelBufferGetHeight(pixelBuffer)
-        guard width > 0 && height > 0 else { return }
-
-        let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
-        guard let baseAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else { return }
-        let ptr = baseAddress.assumingMemoryBound(to: UInt8.self)
-
-        let rowStep = max(1, height / 40)
-        let colStep = max(1, width / 40)
-
-        var sum: UInt64 = 0
-        var count: UInt64 = 0
-        var y = 0
-        while y < height {
-            let rowPtr = ptr.advanced(by: y * bytesPerRow)
-            var x = 0
-            while x < width {
-                sum += UInt64(rowPtr[x])
-                count += 1
-                x += colStep
-            }
-            y += rowStep
-        }
-
-        guard count > 0 else { return }
-        let mean = Double(sum) / Double(count) / 255.0
-
-        var est = 1
-        if mean < 0.25 {
-            est = 3
-        } else if mean < 0.5 {
-            est = 2
-        } else {
-            est = 1
-        }
-
-        // Clamp to device max exposure duration when available (read on sessionQueue)
-        var maxAllowed = 3
+        var estimate: Int?
         sessionQueue.sync {
             if let device = self.currentVideoInput?.device {
-                let maxDur = CMTimeGetSeconds(device.activeFormat.maxExposureDuration)
-                let maxInt = Int(max(1.0, round(maxDur)))
-                maxAllowed = min(maxAllowed, maxInt)
+                estimate = Self.estimatedNightModeSeconds(for: device)
             }
         }
-        if est > maxAllowed { est = maxAllowed }
 
-        if nightModeEstimatedSeconds != est {
-            let finalEst = est
+        guard let estimate else { return }
+        if nightModeEstimatedSeconds != estimate {
+            let finalEst = estimate
             publish { self.nightModeEstimatedSeconds = finalEst }
+        }
+    }
+
+    private static func estimatedNightModeSeconds(for device: AVCaptureDevice) -> Int {
+        let exposureSeconds = max(CMTimeGetSeconds(device.exposureDuration), 1.0 / 10_000.0)
+        let aperture = max(Double(device.lensAperture), 1.0)
+        let iso = max(Double(device.iso), 1.0)
+        let ev100 = log2((aperture * aperture) / exposureSeconds * (100.0 / iso))
+        let meteredEV = ev100 + Double(device.exposureTargetOffset)
+
+        if meteredEV <= 3.0 {
+            return 3
+        } else if meteredEV <= 5.0 {
+            return 2
+        } else {
+            return 1
         }
     }
 }
