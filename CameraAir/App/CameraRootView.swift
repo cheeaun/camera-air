@@ -248,14 +248,16 @@ struct CameraRootView: View {
                         }
                     }
                 } label: {
-                    NightModeIcon(
-                        mode: controller.settings.nightMode,
-                        durationText: controller.nightModeMaxExposureDuration.map { Int($0.rounded()) }.map { "\($0)" }
-                    )
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 38)
-                    .glassCapsule(interactive: true, isActive: controller.settings.nightMode != .off)
-                    .accessibilityLabel(Text(controller.settings.nightMode == .off ? "Night mode off" : "Night mode"))
+                        NightModeIcon(
+                            mode: controller.settings.nightMode,
+                            durationText: controller.nightModeMaxExposureDuration.map { Int($0.rounded()) }.map { "\($0)" }
+                        )
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 38)
+                        .contentShape(Capsule())
+                        .glassCapsule(interactive: true, isActive: controller.settings.nightMode != .off)
+                        .compositingGroup()
+                        .accessibilityLabel(Text(controller.settings.nightMode == .off ? "Night mode off" : "Night mode"))
                 } primaryAction: {
                     triggerInterfaceHaptic()
                     controller.cycleNightMode()
@@ -891,17 +893,12 @@ private struct NightModeIcon: View {
     private var modeOverlay: some View {
         switch mode {
         case .off:
-            ZStack {
-                Circle()
-                    .fill(Color.black.opacity(0.65))
-                    .frame(width: 14, height: 14)
-                // Draw a small diagonal stroke so the slash is always visible
-                Capsule()
-                    .fill(Color.white)
-                    .frame(width: 10, height: 2)
-                    .rotationEffect(.degrees(45))
-            }
-            .offset(x: 5, y: -4)
+            // Draw a small diagonal stroke (no dark circle background)
+            Capsule()
+                .fill(Color.white)
+                .frame(width: 12, height: 2)
+                .rotationEffect(.degrees(45))
+                .offset(x: 5, y: -4)
         case .auto:
             EmptyView()
         case .max:
