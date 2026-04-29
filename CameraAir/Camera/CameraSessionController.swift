@@ -1223,7 +1223,8 @@ extension CameraSessionController: AVCaptureVideoDataOutputSampleBufferDelegate 
         if est > maxAllowed { est = maxAllowed }
 
         if nightModeEstimatedSeconds != est {
-            publish { self.nightModeEstimatedSeconds = est }
+            let finalEst = est
+            publish { self.nightModeEstimatedSeconds = finalEst }
         }
     }
 }
