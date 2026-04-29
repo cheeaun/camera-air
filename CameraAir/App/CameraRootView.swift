@@ -112,6 +112,9 @@ struct CameraRootView: View {
                 }
             )
         }
+        .sheet(isPresented: $isSettingsExpanded) {
+            settingsSheet
+        }
         .onAppear {
             zoomSliderValue = controller.settings.customZoomFactor
         }
@@ -159,31 +162,13 @@ struct CameraRootView: View {
     }
 
     private var chromeOverlay: some View {
-        ZStack {
-            if isSettingsExpanded {
-                Color.black.opacity(0.001)
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        isSettingsExpanded = false
-                    }
-                    .transition(.opacity)
-            }
-
-            VStack(spacing: 0) {
-                topBar
-                Spacer(minLength: 16)
-                if isSettingsExpanded {
-                    settingsPanel
-                        .padding(.horizontal, 18)
-                        .padding(.bottom, 18)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-                bottomBar
-            }
-            .padding(.top, 14)
-            .padding(.bottom, 14)
+        VStack(spacing: 0) {
+            topBar
+            Spacer(minLength: 16)
+            bottomBar
         }
+        .padding(.top, 14)
+        .padding(.bottom, 14)
         .animation(.snappy(duration: 0.28), value: isSettingsExpanded)
         .animation(.snappy(duration: 0.22), value: controller.mode)
         .animation(.snappy(duration: 0.22), value: controller.isRecording)
@@ -291,21 +276,24 @@ struct CameraRootView: View {
         .padding(.horizontal, 18)
     }
 
-    private var settingsPanel: some View {
-        GlassPanel {
+    private var settingsSheet: some View {
+        NavigationStack {
             RememberLastSettingsPanel(
                 rememberLastSettings: controller.rememberLastSettings,
-                onMasterToggle: { isEnabled in
-                    triggerInterfaceHaptic()
-                    controller.setRememberLastSettingsEnabled(isEnabled)
-                },
                 onSettingToggle: { setting, isEnabled in
                     triggerInterfaceHaptic()
                     controller.setRememberLastSetting(setting, isEnabled: isEnabled)
                 }
             )
+            .padding(.top, 12)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
+            .navigationTitle("Remember Last Settings")
+            .navigationBarTitleDisplayMode(.inline)
         }
-        .padding(.horizontal, 18)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(.ultraThinMaterial)
     }
 
     private var bottomBar: some View {
@@ -975,27 +963,16 @@ private struct ExposureLockIcon: View {
 
 private struct RememberLastSettingsPanel: View {
     let rememberLastSettings: CameraRememberLastSettings
-    let onMasterToggle: (Bool) -> Void
     let onSettingToggle: (RememberedCameraSetting, Bool) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            ToggleRow(
-                title: "Remember last settings",
-                isOn: rememberLastSettings.isEnabled,
-                isEnabled: true,
-                onToggle: onMasterToggle
-            )
-
-            Divider()
-                .overlay(.white.opacity(0.18))
-
             VStack(spacing: 10) {
                 ForEach(RememberedCameraSetting.allCases) { setting in
                     ToggleRow(
                         title: setting.title,
                         isOn: rememberLastSettings.enabledSettings.contains(setting),
-                        isEnabled: rememberLastSettings.isEnabled,
+                        isEnabled: true,
                         onToggle: { isEnabled in
                             onSettingToggle(setting, isEnabled)
                         }
