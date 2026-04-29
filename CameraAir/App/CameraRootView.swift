@@ -196,7 +196,7 @@ struct CameraRootView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 6) {
             FlashMenu(
                 selection: controller.settings.flash,
                 isEnabled: controller.capabilities.hasFlash,
@@ -453,7 +453,7 @@ private struct AspectRatioControls: View {
     let onOrientationTap: () -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             Button(action: onRatioTap) {
                 Text(ratioText)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
@@ -609,6 +609,7 @@ private struct ZoomFactorSlider: View {
 
     private let presetFactors: [CGFloat] = [0.5, 1.0, 10.0]
     private let tickCount = 40
+    private let horizontalContentInset: CGFloat = 18
 
     var body: some View {
         VStack(spacing: 1) {
@@ -626,12 +627,14 @@ private struct ZoomFactorSlider: View {
     private var trackWithTicks: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
+            let contentInset = contentInset(for: width)
+            let contentWidth = max(width - contentInset * 2, 0)
             let trackY: CGFloat = 16
             let labelY: CGFloat = isDragging ? trackY - 28 : trackY - 14
 
             ZStack(alignment: .top) {
                 ForEach(0..<tickCount, id: \.self) { index in
-                    let x = tickPosition(for: index, total: tickCount, in: width)
+                    let x = contentInset + tickPosition(for: index, total: tickCount, in: contentWidth)
                     let isMajor = isTickMajor(index: index, total: tickCount)
 
                     Rectangle()
@@ -755,30 +758,39 @@ private struct ZoomFactorSlider: View {
 
     private func currentLabelX(in width: CGFloat) -> CGFloat {
         if isDragging, dragX > 0 {
-            return min(max(dragX, 0), width)
+            let inset = contentInset(for: width)
+            return min(max(dragX, inset), max(width - inset, inset))
         }
         return labelX(for: value, in: width)
     }
 
     private func factor(for locationX: CGFloat, in width: CGFloat) -> CGFloat {
         guard width > 0 else { return value }
-        let clampedX = min(max(locationX, 0), width)
+        let inset = contentInset(for: width)
+        let contentWidth = max(width - inset * 2, 1)
+        let clampedX = min(max(locationX, inset), width - inset) - inset
         let logLower = log(range.lowerBound)
         let logUpper = log(range.upperBound)
-        let normalizedLogProgress = clampedX / width
+        let normalizedLogProgress = clampedX / contentWidth
         let logValue = logLower + (logUpper - logLower) * normalizedLogProgress
         return exp(logValue)
     }
 
     private func labelX(for factor: CGFloat, in width: CGFloat) -> CGFloat {
         guard width > 0 else { return 0 }
+        let inset = contentInset(for: width)
+        let contentWidth = max(width - inset * 2, 0)
         let logLower = log(range.lowerBound)
         let logUpper = log(range.upperBound)
         let logRange = logUpper - logLower
         guard logRange > 0 else { return width / 2 }
         let logFactor = log(factor)
         let normalizedLogProgress = min(max((logFactor - logLower) / logRange, 0), 1)
-        return normalizedLogProgress * width
+        return inset + normalizedLogProgress * contentWidth
+    }
+
+    private func contentInset(for width: CGFloat) -> CGFloat {
+        min(horizontalContentInset, width / 2)
     }
 
     private func factorForTick(index: Int, total: Int) -> CGFloat {
