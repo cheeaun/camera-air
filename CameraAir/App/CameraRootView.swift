@@ -248,16 +248,7 @@ struct CameraRootView: View {
                         }
                     }
                 } label: {
-                    let durationText: String? = {
-                        if let est = controller.nightModeEstimatedSeconds { return "\(est)" }
-                        if let max = controller.nightModeMaxExposureDuration { return "\(Int(max.rounded()))" }
-                        return nil
-                    }()
-
-                    NightModeIcon(
-                        mode: controller.settings.nightMode,
-                        durationText: durationText
-                    )
+                    NightModeIcon(mode: controller.settings.nightMode)
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 38)
                     .contentShape(Capsule())
@@ -884,7 +875,6 @@ private struct FlashMenu: View {
 
 private struct NightModeIcon: View {
     let mode: NightModePreference
-    var durationText: String?
 
     var body: some View {
         ZStack {
@@ -907,16 +897,6 @@ private struct NightModeIcon: View {
                 .offset(x: 5, y: -4)
         case .auto:
             EmptyView()
-        case .max:
-            if let durationText {
-                Text(durationText)
-                    .font(.system(size: 8, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(.black.opacity(0.65), in: Capsule())
-                    .offset(x: 5, y: -4)
-            }
         }
     }
 }

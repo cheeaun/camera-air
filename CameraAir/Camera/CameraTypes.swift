@@ -247,7 +247,6 @@ enum AspectOrientation: String, CaseIterable, Identifiable, Codable {
 }
 
 enum NightModePreference: String, CaseIterable, Identifiable, Codable {
-    case max
     case auto
     case off
 
@@ -257,7 +256,7 @@ enum NightModePreference: String, CaseIterable, Identifiable, Codable {
         rawValue.capitalized
     }
 
-    static var cyclingOrder: [NightModePreference] { [.max, .auto, .off] }
+    static var cyclingOrder: [NightModePreference] { [.auto, .off] }
 }
 
 enum ZoomLevel: String, CaseIterable, Identifiable, Codable {
@@ -298,7 +297,7 @@ struct CameraSettings: Equatable, Codable {
     var isExposureLocked = false
     var aspectRatio: AspectRatioOption = .portrait34
     var aspectOrientation: AspectOrientation = .portrait
-    var nightMode: NightModePreference = .max
+    var nightMode: NightModePreference = .auto
     var zoomLevel: ZoomLevel = .standard
     var customZoomFactor: CGFloat = 1.0
 
@@ -333,7 +332,11 @@ struct CameraSettings: Equatable, Codable {
         aspectRatio = rawAspectRatio.normalized
         aspectOrientation = (try? container.decode(AspectOrientation.self, forKey: .aspectOrientation)) ?? defaults.aspectOrientation
         aspectRatio = aspectOrientation.coercedAspectRatio(aspectRatio)
-        nightMode = (try? container.decode(NightModePreference.self, forKey: .nightMode)) ?? defaults.nightMode
+        if let decodedNightMode = try? container.decode(NightModePreference.self, forKey: .nightMode) {
+            nightMode = decodedNightMode
+        } else {
+            nightMode = defaults.nightMode
+        }
         zoomLevel = (try? container.decode(ZoomLevel.self, forKey: .zoomLevel)) ?? defaults.zoomLevel
         customZoomFactor = (try? container.decode(CGFloat.self, forKey: .customZoomFactor)) ?? defaults.customZoomFactor
     }
