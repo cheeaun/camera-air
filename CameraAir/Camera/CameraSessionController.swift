@@ -45,9 +45,14 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private var recordingStartTime: Date?
     private var recordingTimer: Timer?
     
-    // Timer used to poll the current device exposureDuration to estimate
-    // how many seconds Night mode would require. This is Option A (cheap).
-    private var exposurePollTimer: Timer?
+    // Video data output for lightweight preview sampling (used when Night mode == .max)
+    private let videoDataOutput = AVCaptureVideoDataOutput()
+    private let videoOutputQueue = DispatchQueue(label: "CameraAir.VideoOutputQueue")
+
+    // Remember a user's Live Photo preference so we can restore it after leaving .max
+    private var previousLivePhotoEnabled: Bool?
+    // Throttle sampling publishes
+    private var lastNightModeSampleTimestamp: TimeInterval?
 
     private var currentVideoInput: AVCaptureDeviceInput?
     private var currentAudioInput: AVCaptureDeviceInput?
@@ -168,8 +173,11 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             guard let strongSelf = self, strongSelf.isConfigured, !strongSelf.session.isRunning else { return }
             strongSelf.session.startRunning()
             strongSelf.startRecordingIfNeeded()
-            DispatchQueue.main.async { [weak self] in
-                self?.startExposurePolling()
+            // Enable preview sampling delegate only if Night mode is set to .max
+            if strongSelf.settings.nightMode == .max {
+                strongSelf.videoDataOutput.setSampleBufferDelegate(strongSelf, queue: strongSelf.videoOutputQueue)
+            } else {
+                strongSelf.videoDataOutput.setSampleBufferDelegate(nil, queue: nil)
             }
         }
     }
@@ -183,7 +191,12 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             strongSelf.session.stopRunning()
         }
         stopRecordingTimer()
-        stopExposurePolling()
+        // Ensure sampling delegate removed when pausing
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.videoDataOutput.setSampleBufferDelegate(nil, queue: nil)
+            self.publish { self.nightModeEstimatedSeconds = nil }
+        }
     }
 
     func setMode(_ mode: CaptureMode) {
@@ -252,7 +265,12 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             }
             strongSelf.applyCaptureSettings()
             strongSelf.saveSettings()
-            strongSelf.startExposurePolling()
+            // Update delegate for new lens if needed
+            if strongSelf.settings.nightMode == .max {
+                strongSelf.videoDataOutput.setSampleBufferDelegate(strongSelf, queue: strongSelf.videoOutputQueue)
+            } else {
+                strongSelf.videoDataOutput.setSampleBufferDelegate(nil, queue: nil)
+            }
             strongSelf.startRecordingIfNeeded()
         }
     }
@@ -353,8 +371,25 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         publish {
             self.settings.nightMode = nightMode
         }
+
+        // When entering .max, disable Live Photo and remember the previous state so we can restore it.
+        if nightMode == .max {
+            if settings.isLivePhotoEnabled {
+                previousLivePhotoEnabled = settings.isLivePhotoEnabled
+                publish { self.settings.isLivePhotoEnabled = false }
+                showTransientToast("Live Photo off")
+            }
+        } else {
+            if let prev = previousLivePhotoEnabled {
+                publish { self.settings.isLivePhotoEnabled = prev }
+                previousLivePhotoEnabled = nil
+                showTransientToast(settings.isLivePhotoEnabled ? "Live Photo on" : "Live Photo off")
+            }
+        }
+
         saveSettings()
         triggerSelectionFeedback()
+
         // Show toast similar to other toggle controls
         if nightMode == .max {
             if let seconds = nightModeMaxExposureDuration, seconds > 1 {
@@ -365,8 +400,15 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         } else {
             showTransientToast("Night mode \(nightMode.title.lowercased())")
         }
+
         sessionQueue.async { [weak self] in
-            self?.applyCaptureSettings()
+            guard let self = self else { return }
+            if nightMode == .max {
+                self.videoDataOutput.setSampleBufferDelegate(self, queue: self.videoOutputQueue)
+            } else {
+                self.videoDataOutput.setSampleBufferDelegate(nil, queue: nil)
+            }
+            self.applyCaptureSettings()
         }
     }
 
@@ -506,6 +548,16 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 strongSelf.photoOutput.maxPhotoQualityPrioritization = .speed
             }
 
+            // Add a lightweight video data output for preview-sampling (disabled delegate by default)
+            if strongSelf.session.canAddOutput(strongSelf.videoDataOutput) {
+                strongSelf.videoDataOutput.alwaysDiscardsLateVideoFrames = true
+                strongSelf.videoDataOutput.videoSettings = [
+                    kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+                ]
+                strongSelf.videoDataOutput.setSampleBufferDelegate(nil, queue: nil)
+                strongSelf.session.addOutput(strongSelf.videoDataOutput)
+            }
+
             strongSelf.configureMovieOutput(for: strongSelf.mode)
 
             strongSelf.session.commitConfiguration()
@@ -515,7 +567,12 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 strongSelf.refreshCapabilities()
                 strongSelf.applyCaptureSettings()
-                strongSelf.startExposurePolling()
+                // Enable preview sampling delegate if Night mode is .max
+                if strongSelf.settings.nightMode == .max {
+                    strongSelf.videoDataOutput.setSampleBufferDelegate(strongSelf, queue: strongSelf.videoOutputQueue)
+                } else {
+                    strongSelf.videoDataOutput.setSampleBufferDelegate(nil, queue: nil)
+                }
             }
             strongSelf.startRecordingIfNeeded()
         }
@@ -997,40 +1054,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
     }
 
-    // MARK: - Exposure polling (Option A)
-
-    private func startExposurePolling(interval: TimeInterval = 0.5) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.stopExposurePolling()
-            self.exposurePollTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-                guard let self = self else { return }
-                self.sessionQueue.async { [weak self] in
-                    guard let self = self, let device = self.currentVideoInput?.device else { return }
-                    let cur = CMTimeGetSeconds(device.exposureDuration)
-                    let maxDur = CMTimeGetSeconds(device.activeFormat.maxExposureDuration)
-                    var est = Int(Swift.max(1.0, round(cur)))
-                    if est > Int(maxDur) { est = Int(maxDur) }
-                    if self.nightModeEstimatedSeconds != est {
-                        let finalEst = est
-                        self.publish { self.nightModeEstimatedSeconds = finalEst }
-                    }
-                }
-            }
-            if let timer = self.exposurePollTimer {
-                RunLoop.main.add(timer, forMode: .common)
-            }
-        }
-    }
-
-    private func stopExposurePolling() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.exposurePollTimer?.invalidate()
-            self.exposurePollTimer = nil
-            self.publish { self.nightModeEstimatedSeconds = nil }
-        }
-    }
+    
 
     private func triggerSelectionFeedback() {
         Task { @MainActor in
@@ -1129,6 +1153,78 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension(pathExtension)
+    }
+}
+
+// MARK: - Video data output (preview sampling)
+
+extension CameraSessionController: AVCaptureVideoDataOutputSampleBufferDelegate {
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        // Only sample while user selected Night mode == .max
+        guard settings.nightMode == .max else { return }
+
+        let now = Date().timeIntervalSince1970
+        if let last = lastNightModeSampleTimestamp, now - last < 0.18 {
+            return
+        }
+        lastNightModeSampleTimestamp = now
+
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        guard width > 0 && height > 0 else { return }
+
+        let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+        guard let baseAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else { return }
+        let ptr = baseAddress.assumingMemoryBound(to: UInt8.self)
+
+        let rowStep = max(1, height / 40)
+        let colStep = max(1, width / 40)
+
+        var sum: UInt64 = 0
+        var count: UInt64 = 0
+        var y = 0
+        while y < height {
+            let rowPtr = ptr.advanced(by: y * bytesPerRow)
+            var x = 0
+            while x < width {
+                sum += UInt64(rowPtr[x])
+                count += 1
+                x += colStep
+            }
+            y += rowStep
+        }
+
+        guard count > 0 else { return }
+        let mean = Double(sum) / Double(count) / 255.0
+
+        var est = 1
+        if mean < 0.25 {
+            est = 3
+        } else if mean < 0.5 {
+            est = 2
+        } else {
+            est = 1
+        }
+
+        // Clamp to device max exposure duration when available (read on sessionQueue)
+        var maxAllowed = 3
+        sessionQueue.sync {
+            if let device = self.currentVideoInput?.device {
+                let maxDur = CMTimeGetSeconds(device.activeFormat.maxExposureDuration)
+                let maxInt = Int(max(1.0, round(maxDur)))
+                maxAllowed = min(maxAllowed, maxInt)
+            }
+        }
+        if est > maxAllowed { est = maxAllowed }
+
+        if nightModeEstimatedSeconds != est {
+            publish { self.nightModeEstimatedSeconds = est }
+        }
     }
 }
 
