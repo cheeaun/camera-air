@@ -290,11 +290,19 @@ struct CameraRootView: View {
         .padding(.horizontal, 18)
     }
 
-private var settingsPanel: some View {
+    private var settingsPanel: some View {
         GlassPanel {
-            VStack(alignment: .leading, spacing: 18) {
-                // Night mode is now in the toggle chips
-            }
+            RememberLastSettingsPanel(
+                rememberLastSettings: controller.rememberLastSettings,
+                onMasterToggle: { isEnabled in
+                    triggerInterfaceHaptic()
+                    controller.setRememberLastSettingsEnabled(isEnabled)
+                },
+                onSettingToggle: { setting, isEnabled in
+                    triggerInterfaceHaptic()
+                    controller.setRememberLastSetting(setting, isEnabled: isEnabled)
+                }
+            )
         }
         .padding(.horizontal, 18)
     }
@@ -961,6 +969,62 @@ private struct ExposureLockIcon: View {
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
             }
         }
+    }
+}
+
+private struct RememberLastSettingsPanel: View {
+    let rememberLastSettings: CameraRememberLastSettings
+    let onMasterToggle: (Bool) -> Void
+    let onSettingToggle: (RememberedCameraSetting, Bool) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ToggleRow(
+                title: "Remember last settings",
+                isOn: rememberLastSettings.isEnabled,
+                isEnabled: true,
+                onToggle: onMasterToggle
+            )
+
+            Divider()
+                .overlay(.white.opacity(0.18))
+
+            VStack(spacing: 10) {
+                ForEach(RememberedCameraSetting.allCases) { setting in
+                    ToggleRow(
+                        title: setting.title,
+                        isOn: rememberLastSettings.enabledSettings.contains(setting),
+                        isEnabled: rememberLastSettings.isEnabled,
+                        onToggle: { isEnabled in
+                            onSettingToggle(setting, isEnabled)
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct ToggleRow: View {
+    let title: String
+    let isOn: Bool
+    let isEnabled: Bool
+    let onToggle: (Bool) -> Void
+
+    var body: some View {
+        Toggle(isOn: Binding(
+            get: { isOn },
+            set: { newValue in
+                onToggle(newValue)
+            }
+        )) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(isEnabled ? 0.9 : 0.42))
+        }
+        .toggleStyle(.switch)
+        .tint(.white)
+        .disabled(!isEnabled)
     }
 }
 

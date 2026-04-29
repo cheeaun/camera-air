@@ -342,6 +342,60 @@ struct CameraSettings: Equatable, Codable {
     }
 }
 
+enum RememberedCameraSetting: String, CaseIterable, Identifiable, Codable {
+    case flash
+    case aspectRatio
+    case orientation
+    case exposure
+    case nightMode
+    case livePhoto
+    case zoom
+    case mode
+    case lens
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .flash:
+            return "Flash"
+        case .aspectRatio:
+            return "Aspect ratio"
+        case .orientation:
+            return "Orientation"
+        case .exposure:
+            return "Exposure"
+        case .nightMode:
+            return "Night mode"
+        case .livePhoto:
+            return "Live Photo"
+        case .zoom:
+            return "Zoom"
+        case .mode:
+            return "Photo/video mode"
+        case .lens:
+            return "Front/back camera"
+        }
+    }
+}
+
+struct CameraRememberLastSettings: Equatable, Codable {
+    var isEnabled = true
+    var enabledSettings: Set<RememberedCameraSetting> = Set(RememberedCameraSetting.allCases)
+
+    func remembers(_ setting: RememberedCameraSetting) -> Bool {
+        isEnabled && enabledSettings.contains(setting)
+    }
+
+    mutating func setRemembers(_ setting: RememberedCameraSetting, isEnabled: Bool) {
+        if isEnabled {
+            enabledSettings.insert(setting)
+        } else {
+            enabledSettings.remove(setting)
+        }
+    }
+}
+
 struct CameraCapabilities: Equatable {
     var hasFlash = false
     var supportsLivePhoto = false

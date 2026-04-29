@@ -7,6 +7,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     @Published private(set) var mode: CaptureMode = .photo
     @Published private(set) var lens: CameraLens = .back
     @Published private(set) var settings = CameraSettings()
+    @Published private(set) var rememberLastSettings = CameraRememberLastSettings()
     @Published private(set) var capabilities = CameraCapabilities()
     @Published private(set) var isRecording = false
     @Published private(set) var recordingDuration: TimeInterval = 0
@@ -22,6 +23,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     let session = AVCaptureSession()
 
     private static let settingsKey = "CameraAir.Settings"
+    private static let rememberLastSettingsKey = "CameraAir.RememberLastSettings"
+    private static let modeKey = "CameraAir.Mode"
+    private static let lensKey = "CameraAir.Lens"
     private static let lastCapturedKey = "CameraAir.LastCaptured"
     private static let recentCapturedKey = "CameraAir.RecentCaptured"
     private static let maxRecentCaptureCount = 100
@@ -72,6 +76,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         if let livePhotoSupportOverride {
             capabilities.supportsLivePhoto = livePhotoSupportOverride
         }
+        loadRememberLastSettings()
         loadSettings()
         loadLastCapturedAsset()
     }
@@ -80,10 +85,43 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         ProcessInfo.processInfo.arguments.contains("-ui-testing")
     }
 
+    private func loadRememberLastSettings() {
+        guard let data = UserDefaults.standard.data(forKey: Self.rememberLastSettingsKey),
+              let decoded = try? JSONDecoder().decode(CameraRememberLastSettings.self, from: data) else { return }
+        rememberLastSettings = decoded
+    }
+
     private func loadSettings() {
-        guard let data = UserDefaults.standard.data(forKey: Self.settingsKey),
-              let decoded = try? JSONDecoder().decode(CameraSettings.self, from: data) else { return }
-        settings = decoded
+        var loadedSettings = CameraSettings()
+        if let data = UserDefaults.standard.data(forKey: Self.settingsKey),
+           let decoded = try? JSONDecoder().decode(CameraSettings.self, from: data) {
+            if rememberLastSettings.remembers(.flash) { loadedSettings.flash = decoded.flash }
+            if rememberLastSettings.remembers(.aspectRatio) { loadedSettings.aspectRatio = decoded.aspectRatio }
+            if rememberLastSettings.remembers(.orientation) {
+                loadedSettings.aspectOrientation = decoded.aspectOrientation
+                loadedSettings.aspectRatio = decoded.aspectOrientation.coercedAspectRatio(loadedSettings.aspectRatio)
+            }
+            if rememberLastSettings.remembers(.exposure) { loadedSettings.isExposureLocked = decoded.isExposureLocked }
+            if rememberLastSettings.remembers(.nightMode) { loadedSettings.nightMode = decoded.nightMode }
+            if rememberLastSettings.remembers(.livePhoto) { loadedSettings.isLivePhotoEnabled = decoded.isLivePhotoEnabled }
+            if rememberLastSettings.remembers(.zoom) {
+                loadedSettings.zoomLevel = decoded.zoomLevel
+                loadedSettings.customZoomFactor = decoded.customZoomFactor
+            }
+            loadedSettings.aspectRatio = loadedSettings.aspectOrientation.coercedAspectRatio(loadedSettings.aspectRatio)
+        }
+        settings = loadedSettings
+
+        if rememberLastSettings.remembers(.mode),
+           let rawMode = UserDefaults.standard.string(forKey: Self.modeKey),
+           let decodedMode = CaptureMode(rawValue: rawMode) {
+            mode = decodedMode
+        }
+        if rememberLastSettings.remembers(.lens),
+           let rawLens = UserDefaults.standard.string(forKey: Self.lensKey),
+           let decodedLens = CameraLens(rawValue: rawLens) {
+            lens = decodedLens
+        }
     }
 
     private func loadLastCapturedAsset() {
@@ -130,9 +168,68 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
     }
 
-    private func saveSettings() {
-        guard let data = try? JSONEncoder().encode(settings) else { return }
+    private func saveRememberLastSettings() {
+        guard let data = try? JSONEncoder().encode(rememberLastSettings) else { return }
+        UserDefaults.standard.set(data, forKey: Self.rememberLastSettingsKey)
+    }
+
+    private func saveSettings(for rememberedSetting: RememberedCameraSetting) {
+        guard rememberLastSettings.remembers(rememberedSetting) else { return }
+        if rememberedSetting == .mode {
+            UserDefaults.standard.set(mode.rawValue, forKey: Self.modeKey)
+            return
+        }
+        if rememberedSetting == .lens {
+            UserDefaults.standard.set(lens.rawValue, forKey: Self.lensKey)
+            return
+        }
+
+        let existingData = UserDefaults.standard.data(forKey: Self.settingsKey)
+        let existingSettings = existingData.flatMap { try? JSONDecoder().decode(CameraSettings.self, from: $0) } ?? CameraSettings()
+        var storedSettings = existingSettings
+
+        switch rememberedSetting {
+        case .flash:
+            storedSettings.flash = settings.flash
+        case .aspectRatio:
+            storedSettings.aspectRatio = settings.aspectRatio
+        case .orientation:
+            storedSettings.aspectOrientation = settings.aspectOrientation
+            storedSettings.aspectRatio = settings.aspectRatio
+        case .exposure:
+            storedSettings.isExposureLocked = settings.isExposureLocked
+        case .nightMode:
+            storedSettings.nightMode = settings.nightMode
+        case .livePhoto:
+            storedSettings.isLivePhotoEnabled = settings.isLivePhotoEnabled
+        case .zoom:
+            storedSettings.zoomLevel = settings.zoomLevel
+            storedSettings.customZoomFactor = settings.customZoomFactor
+        case .mode, .lens:
+            break
+        }
+
+        guard let data = try? JSONEncoder().encode(storedSettings) else { return }
         UserDefaults.standard.set(data, forKey: Self.settingsKey)
+    }
+
+    func setRememberLastSettingsEnabled(_ isEnabled: Bool) {
+        guard rememberLastSettings.isEnabled != isEnabled else { return }
+        publish {
+            self.rememberLastSettings.isEnabled = isEnabled
+        }
+        saveRememberLastSettings()
+    }
+
+    func setRememberLastSetting(_ setting: RememberedCameraSetting, isEnabled: Bool) {
+        guard rememberLastSettings.enabledSettings.contains(setting) != isEnabled else { return }
+        publish {
+            self.rememberLastSettings.setRemembers(setting, isEnabled: isEnabled)
+        }
+        saveRememberLastSettings()
+        if isEnabled {
+            saveSettings(for: setting)
+        }
     }
 
     func prepare() {
@@ -187,6 +284,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         publish {
             self.mode = mode
         }
+        saveSettings(for: .mode)
         triggerSelectionFeedback()
         showTransientToast("\(mode.title) mode")
 
@@ -211,6 +309,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         publish {
             self.lens = lens
         }
+        saveSettings(for: .lens)
         triggerSelectionFeedback()
         showTransientToast("\(lens.title) camera")
 
@@ -247,7 +346,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 strongSelf.settings.customZoomFactor = strongSelf.clampedDisplayZoomFactor(1.0)
             }
             strongSelf.applyCaptureSettings()
-            strongSelf.saveSettings()
+            strongSelf.saveSettings(for: .zoom)
             strongSelf.startRecordingIfNeeded()
         }
     }
@@ -257,7 +356,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         publish {
             self.settings.flash = flash
         }
-        saveSettings()
+        saveSettings(for: .flash)
         triggerSelectionFeedback()
         showTransientToast("Flash \(flash.title.lowercased())")
     }
@@ -267,7 +366,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         publish {
             self.settings.isLivePhotoEnabled.toggle()
         }
-        saveSettings()
+        saveSettings(for: .livePhoto)
         triggerSelectionFeedback()
         showTransientToast(isEnabled ? "Live Photo on" : "Live Photo off")
         sessionQueue.async { [weak self] in
@@ -280,7 +379,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         publish {
             self.settings.isExposureLocked.toggle()
         }
-        saveSettings()
+        saveSettings(for: .exposure)
         triggerSelectionFeedback()
         showTransientToast(isLocked ? "Exposure locked" : "Exposure unlocked")
         sessionQueue.async { [weak self] in
@@ -303,7 +402,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             self.settings.aspectRatio = nextAspectRatio
             self.settings.aspectOrientation = nextOrientation
         }
-        saveSettings()
+        saveSettings(for: .aspectRatio)
+        saveSettings(for: .orientation)
         triggerSelectionFeedback()
         showTransientToast("Aspect ratio \(nextAspectRatio.title(for: nextOrientation))")
     }
@@ -338,7 +438,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             self.settings.aspectOrientation = nextOrientation
             self.settings.aspectRatio = nextOrientation.coercedAspectRatio(nextAspectRatio)
         }
-        saveSettings()
+        saveSettings(for: .aspectRatio)
+        saveSettings(for: .orientation)
         triggerSelectionFeedback()
         showTransientToast("Orientation \(nextOrientation.rawValue)")
     }
@@ -349,7 +450,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             self.settings.nightMode = nightMode
         }
 
-        saveSettings()
+        saveSettings(for: .nightMode)
         triggerSelectionFeedback()
         showTransientToast("Night mode \(nightMode.title.lowercased())")
         sessionQueue.async { [weak self] in
@@ -376,7 +477,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             self.settings.zoomLevel = self.closestZoomLevel(for: clampedFactor)
         }
         if persist {
-            saveSettings()
+            saveSettings(for: .zoom)
         }
         sessionQueue.async { [weak self] in
             self?.applyZoomSettings(animated: animated)
@@ -384,7 +485,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func commitZoomSelection() {
-        saveSettings()
+        saveSettings(for: .zoom)
     }
 
     func performPrimaryAction() {
