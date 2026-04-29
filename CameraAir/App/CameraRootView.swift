@@ -159,23 +159,7 @@ struct CameraRootView: View {
     }
 
     private var chromeOverlay: some View {
-        VStack(spacing: 0) {
-            topBar
-            Spacer(minLength: 16)
-            if isSettingsExpanded {
-                settingsPanel
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 18)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            bottomBar
-        }
-        .padding(.top, 14)
-        .padding(.bottom, 14)
-        .animation(.snappy(duration: 0.28), value: isSettingsExpanded)
-        .animation(.snappy(duration: 0.22), value: controller.mode)
-        .animation(.snappy(duration: 0.22), value: controller.isRecording)
-        .overlay {
+        ZStack {
             if isSettingsExpanded {
                 Color.black.opacity(0.001)
                     .ignoresSafeArea()
@@ -185,7 +169,24 @@ struct CameraRootView: View {
                     }
                     .transition(.opacity)
             }
+
+            VStack(spacing: 0) {
+                topBar
+                Spacer(minLength: 16)
+                if isSettingsExpanded {
+                    settingsPanel
+                        .padding(.horizontal, 18)
+                        .padding(.bottom, 18)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                bottomBar
+            }
+            .padding(.top, 14)
+            .padding(.bottom, 14)
         }
+        .animation(.snappy(duration: 0.28), value: isSettingsExpanded)
+        .animation(.snappy(duration: 0.22), value: controller.mode)
+        .animation(.snappy(duration: 0.22), value: controller.isRecording)
         .overlay(alignment: .top) {
             if let message = controller.errorMessage ?? controller.toastMessage {
                 ToastLabel(message: message)
@@ -1012,45 +1013,18 @@ private struct ToggleRow: View {
     let onToggle: (Bool) -> Void
 
     var body: some View {
-        Button {
-            guard isEnabled else { return }
-            onToggle(!isOn)
-        } label: {
-            HStack(spacing: 12) {
+        Toggle(isOn: Binding(
+            get: { isOn },
+            set: { newValue in
+                onToggle(newValue)
+            }
+        )) {
             Text(title)
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white.opacity(isEnabled ? 0.9 : 0.42))
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack(spacing: 0) {
-                    Circle()
-                        .fill(isOn ? Color.white : Color.white.opacity(0.72))
-                        .overlay {
-                            Circle()
-                                .inset(by: 4)
-                                .fill(isOn ? Color.black : Color.black.opacity(0.7))
-                        }
-                        .frame(width: 16, height: 16)
-                        .offset(x: isOn ? 10 : -10)
-                }
-                .frame(width: 38, height: 24)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(isOn ? Color(red: 0.96, green: 0.96, blue: 0.96) : Color.white.opacity(0.22))
-                )
-                .overlay(
-                    Capsule(style: .continuous)
-                        .strokeBorder(Color.white.opacity(isEnabled ? 0.24 : 0.08), lineWidth: 1)
-                )
-            }
-            .contentShape(Rectangle())
-            .frame(minHeight: 30)
         }
-        .buttonStyle(.plain)
+        .toggleStyle(.switch)
         .disabled(!isEnabled)
-        .animation(.snappy(duration: 0.18), value: isOn)
-        .accessibilityLabel(Text(title))
-        .accessibilityValue(Text(isOn ? "On" : "Off"))
     }
 }
 
