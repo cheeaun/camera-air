@@ -458,8 +458,8 @@ private struct AspectRatioControls: View {
                 Text(ratioText)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(isRatioEnabled ? 0.86 : 0.4))
-                    .frame(minWidth: 48, minHeight: 38)
-                    .padding(.horizontal, 6)
+                    .frame(minWidth: 40, minHeight: 38)
+                    .padding(.horizontal, 4)
             }
             .buttonStyle(.plain)
             .disabled(!isRatioEnabled)
