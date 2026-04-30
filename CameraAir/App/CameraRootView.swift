@@ -282,24 +282,21 @@ struct CameraRootView: View {
             let maxDetentHeight = screenHeight * 0.9
             let estimatedContentHeight = CGFloat(RememberedCameraSetting.allCases.count) * 52 + 104
             let detentHeight = min(estimatedContentHeight, maxDetentHeight)
-
             NavigationStack {
-                VStack(spacing: 0) {
-                    sheetHeader
-                        .padding(.horizontal, 20)
-                        .padding(.top, 12)
-                        .padding(.bottom, 12)
-                        .background(
-                            .ultraThinMaterial,
-                            ignoresSafeAreaEdges: .horizontal
-                        )
-                        .overlay(alignment: .bottom) {
-                            Divider()
-                                .background(Color.white.opacity(0.12))
-                        }
-                        .zIndex(1)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Preserve Settings")
+                                .font(.system(.title3, design: .rounded)).fontWeight(.semibold)
+                                .foregroundStyle(.white)
 
-                    ScrollView {
+                            Text("Save current camera controls for the next launch.")
+                                .font(.system(.subheadline, design: .rounded)).fontWeight(.medium)
+                                .foregroundStyle(.white.opacity(0.46))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.top, 8)
+
                         RememberLastSettingsPanel(
                             rememberLastSettings: controller.rememberLastSettings,
                             currentSettings: controller.settings,
@@ -310,11 +307,24 @@ struct CameraRootView: View {
                                 controller.setRememberLastSetting(setting, isEnabled: isEnabled)
                             }
                         )
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                        .padding(.bottom, 34)
                     }
-                    .scrollIndicators(.hidden)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 34)
+                }
+                .navigationTitle("Settings")
+                .navigationBarTitleDisplayMode(.large)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            isSettingsExpanded = false
+                        } label: {
+                            Image(systemName: "xmark")
+                                .imageScale(.medium)
+                                .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text("Close settings"))
+                    }
                 }
             }
             .presentationDetents([.height(detentHeight)])
@@ -444,38 +454,7 @@ struct CameraRootView: View {
     }
 
     private var sheetHeader: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Settings")
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-
-                Text("Preserve Settings")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-
-                Text("Preserve the last used setting, rather than automatically reset.")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.46))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Button {
-                isSettingsExpanded = false
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(width: 30, height: 30)
-                    .background(Color.white.opacity(0.08), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("Close settings"))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 4)
-        .padding(.bottom, 2)
+        EmptyView()
     }
 
     private var permissionOverlay: some View {
@@ -1065,9 +1044,9 @@ private struct ToggleRow: View {
         )) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(.system(.body, design: .rounded)).fontWeight(.semibold)
                 Text("Default: \(detail) · Current: \(currentValue)")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.system(.footnote, design: .rounded)).fontWeight(.medium)
                     .foregroundStyle(.white.opacity(0.42))
             }
             .foregroundStyle(.white.opacity(isEnabled ? 0.9 : 0.42))
