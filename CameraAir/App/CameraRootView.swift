@@ -7,43 +7,35 @@ import UIKit
 @MainActor
 enum CameraHaptics {
     private static weak var hostView: UIView?
-    private static var activeGenerators: [UIImpactFeedbackGenerator] = []
+    private static var cachedGenerators: [UIImpactFeedbackGenerator.FeedbackStyle: UIImpactFeedbackGenerator] = [:]
+    private static let lock = NSLock()
 
     static func setHostView(_ view: UIView) {
         hostView = view
     }
 
-    static func light() {
-        impact(.light)
-    }
-
-    static func interface() {
-        impact(.medium)
-    }
-
-    static func rigid() {
-        impact(.rigid)
-    }
-
-    static func heavy() {
-        impact(.heavy)
-    }
+    static func light() { impact(.light) }
+    static func interface() { impact(.medium) }
+    static func rigid() { impact(.rigid) }
+    static func heavy() { impact(.heavy) }
 
     private static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
-        let generator: UIImpactFeedbackGenerator
-        if #available(iOS 17.5, *), let hostView {
-            generator = UIImpactFeedbackGenerator(style: style, view: hostView)
+        lock.lock()
+        var generator: UIImpactFeedbackGenerator
+        if let existing = cachedGenerators[style] {
+            generator = existing
         } else {
-            generator = UIImpactFeedbackGenerator(style: style)
+            if #available(iOS 17.5, *), let hostView {
+                generator = UIImpactFeedbackGenerator(style: style, view: hostView)
+            } else {
+                generator = UIImpactFeedbackGenerator(style: style)
+            }
+            cachedGenerators[style] = generator
         }
+        lock.unlock()
 
-        activeGenerators.append(generator)
         generator.prepare()
         generator.impactOccurred()
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            activeGenerators.removeAll { $0 === generator }
-        }
     }
 }
 
@@ -648,6 +640,7 @@ private struct ZoomFactorSlider: View {
     private let presetFactors: [CGFloat] = [0.5, 1.0, 10.0]
     private let tickCount = 40
     private let horizontalContentInset: CGFloat = 18
+    
 
     var body: some View {
         VStack(spacing: 1) {
@@ -671,8 +664,21 @@ private struct ZoomFactorSlider: View {
             let labelY: CGFloat = isDragging ? trackY - 28 : trackY - 14
 
             ZStack(alignment: .top) {
+                // Compute tick positions for this layout width (fast, small array)
+                let positions: [CGFloat] = {
+                    let logLower = log(range.lowerBound)
+                    let logUpper = log(range.upperBound)
+                    return (0..<tickCount).map { index in
+                        let progress = CGFloat(index) / CGFloat(tickCount - 1)
+                        let logProgress = sqrt(progress)
+                        let logValue = logLower + (logUpper - logLower) * logProgress
+                        let normalizedLogProgress = (logValue - logLower) / (logUpper - logLower)
+                        return contentInset + normalizedLogProgress * contentWidth
+                    }
+                }()
+
                 ForEach(0..<tickCount, id: \.self) { index in
-                    let x = contentInset + tickPosition(for: index, total: tickCount, in: contentWidth)
+                    let x = positions[index]
                     let isMajor = isTickMajor(index: index, total: tickCount)
 
                     Rectangle()
@@ -1252,6 +1258,22 @@ private struct RecentCapturesView: View {
                 }
             }
         }
+        .onAppear {
+            // Start caching a small window of thumbnails to reduce jitter
+            let cacheCount = min(36, assets.count)
+            guard cacheCount > 0 else { return }
+            let targets = Array(assets.prefix(cacheCount))
+            let options = PHImageRequestOptions()
+            options.isNetworkAccessAllowed = true
+            options.deliveryMode = .highQualityFormat
+            PhotoAssetLoader.cachingManager.startCachingImages(for: targets, targetSize: CGSize(width: 360, height: 360), contentMode: .aspectFill, options: options)
+        }
+        .onDisappear {
+            let cacheCount = min(36, assets.count)
+            guard cacheCount > 0 else { return }
+            let targets = Array(assets.prefix(cacheCount))
+            PhotoAssetLoader.cachingManager.stopCachingImages(for: targets, targetSize: CGSize(width: 360, height: 360), contentMode: .aspectFill, options: nil)
+        }
         .sheet(isPresented: $isLibraryPickerPresented) {
             LibraryPickerView { asset in
                 selectedAsset = asset
@@ -1494,6 +1516,7 @@ private struct CaptureViewer: View {
 }
 
 private enum PhotoAssetLoader {
+    static let cachingManager = PHCachingImageManager()
     static func videoAsset(for asset: PHAsset) async -> AVAsset? {
         let options = PHVideoRequestOptions()
         options.isNetworkAccessAllowed = true
@@ -1501,7 +1524,7 @@ private enum PhotoAssetLoader {
 
         let wrapper = await withCheckedContinuation { (continuation: CheckedContinuation<VideoAssetRequestResult, Never>) in
             let gate = PhotoRequestContinuationGate(continuation: continuation)
-            PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
+            PhotoAssetLoader.cachingManager.requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
                 gate.resume(returning: VideoAssetRequestResult(asset: avAsset))
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
@@ -1525,7 +1548,7 @@ private enum PhotoAssetLoader {
 
         let wrapper = await withCheckedContinuation { (continuation: CheckedContinuation<ImageRequestResult, Never>) in
             let gate = PhotoRequestContinuationGate(continuation: continuation)
-            PHImageManager.default().requestImage(
+            PhotoAssetLoader.cachingManager.requestImage(
                 for: asset,
                 targetSize: targetSize,
                 contentMode: contentMode,

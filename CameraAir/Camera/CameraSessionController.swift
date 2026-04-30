@@ -49,7 +49,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     
     // Video data output for lightweight preview sampling (used for night badge estimation)
     private let videoDataOutput = AVCaptureVideoDataOutput()
-    private let videoOutputQueue = DispatchQueue(label: "CameraAir.VideoOutputQueue")
 
     // Remember a user's Live Photo preference so we can restore it after night mode changes
     private var previousLivePhotoEnabled: Bool?
@@ -61,6 +60,11 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private var hasPrepared = false
     private var pendingRoute: CameraRoute?
     private var isOpeningCapture = false
+
+    // Capability refresh debounce
+    private var lastCapabilitiesRefreshDate = Date.distantPast
+    private var capabilitiesRefreshWorkItem: DispatchWorkItem?
+    private let capabilitiesRefreshCooldown: TimeInterval = 0.25
 
     private let displayZoomCeiling: CGFloat = 10.0
     private let livePhotoSupportOverride: Bool?
@@ -156,7 +160,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         options.isNetworkAccessAllowed = true
 
         let targetSize = CGSize(width: 116, height: 116)
-        PHImageManager.default().requestImage(
+        PHCachingImageManager().requestImage(
             for: asset,
             targetSize: targetSize,
             contentMode: .aspectFill,
@@ -169,8 +173,12 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func saveRememberLastSettings() {
-        guard let data = try? JSONEncoder().encode(rememberLastSettings) else { return }
-        UserDefaults.standard.set(data, forKey: Self.rememberLastSettingsKey)
+        let snapshot = rememberLastSettings
+        DispatchQueue.global(qos: .utility).async {
+            if let data = try? JSONEncoder().encode(snapshot) {
+                UserDefaults.standard.set(data, forKey: Self.rememberLastSettingsKey)
+            }
+        }
     }
 
     private func saveSettings(for rememberedSetting: RememberedCameraSetting) {
@@ -184,33 +192,38 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             return
         }
 
-        let existingData = UserDefaults.standard.data(forKey: Self.settingsKey)
-        let existingSettings = existingData.flatMap { try? JSONDecoder().decode(CameraSettings.self, from: $0) } ?? CameraSettings()
-        var storedSettings = existingSettings
+        let snapshotSettings = settings
+        let snapshotRemembered = rememberedSetting
+        DispatchQueue.global(qos: .utility).async {
+            let existingData = UserDefaults.standard.data(forKey: Self.settingsKey)
+            let existingSettings = existingData.flatMap { try? JSONDecoder().decode(CameraSettings.self, from: $0) } ?? CameraSettings()
+            var storedSettings = existingSettings
 
-        switch rememberedSetting {
-        case .flash:
-            storedSettings.flash = settings.flash
-        case .aspectRatio:
-            storedSettings.aspectRatio = settings.aspectRatio
-        case .orientation:
-            storedSettings.aspectOrientation = settings.aspectOrientation
-            storedSettings.aspectRatio = settings.aspectRatio
-        case .exposure:
-            storedSettings.isExposureLocked = settings.isExposureLocked
-        case .nightMode:
-            storedSettings.nightMode = settings.nightMode
-        case .livePhoto:
-            storedSettings.isLivePhotoEnabled = settings.isLivePhotoEnabled
-        case .zoom:
-            storedSettings.zoomLevel = settings.zoomLevel
-            storedSettings.customZoomFactor = settings.customZoomFactor
-        case .mode, .lens:
-            break
+            switch snapshotRemembered {
+            case .flash:
+                storedSettings.flash = snapshotSettings.flash
+            case .aspectRatio:
+                storedSettings.aspectRatio = snapshotSettings.aspectRatio
+            case .orientation:
+                storedSettings.aspectOrientation = snapshotSettings.aspectOrientation
+                storedSettings.aspectRatio = snapshotSettings.aspectRatio
+            case .exposure:
+                storedSettings.isExposureLocked = snapshotSettings.isExposureLocked
+            case .nightMode:
+                storedSettings.nightMode = snapshotSettings.nightMode
+            case .livePhoto:
+                storedSettings.isLivePhotoEnabled = snapshotSettings.isLivePhotoEnabled
+            case .zoom:
+                storedSettings.zoomLevel = snapshotSettings.zoomLevel
+                storedSettings.customZoomFactor = snapshotSettings.customZoomFactor
+            case .mode, .lens:
+                break
+            }
+
+            if let data = try? JSONEncoder().encode(storedSettings) {
+                UserDefaults.standard.set(data, forKey: Self.settingsKey)
+            }
         }
-
-        guard let data = try? JSONEncoder().encode(storedSettings) else { return }
-        UserDefaults.standard.set(data, forKey: Self.settingsKey)
     }
 
     func setRememberLastSettingsEnabled(_ isEnabled: Bool) {
@@ -865,6 +878,19 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func refreshCapabilities() {
+        // Debounce rapid refresh requests to avoid repeated device discovery work
+        let now = Date()
+        if now.timeIntervalSince(lastCapabilitiesRefreshDate) < capabilitiesRefreshCooldown {
+            capabilitiesRefreshWorkItem?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.refreshCapabilities()
+            }
+            capabilitiesRefreshWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + capabilitiesRefreshCooldown, execute: workItem)
+            return
+        }
+        lastCapabilitiesRefreshDate = now
+        capabilitiesRefreshWorkItem = nil
         let device = currentVideoInput?.device
         let minZoom = displayZoomFactor(for: device?.minAvailableVideoZoomFactor ?? 1.0, on: device)
         let maxZoom = min(displayZoomFactor(for: device?.maxAvailableVideoZoomFactor ?? 1.0, on: device), displayZoomCeiling)
@@ -1390,6 +1416,9 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
 
     private var processedPhotoData: Data?
     private var didFinish = false
+    private var originalPhotoData: Data?
+    private let processingQueue = DispatchQueue(label: "CameraAir.PhotoProcessingQueue", qos: .userInitiated)
+    private let processingSemaphore = DispatchSemaphore(value: 0)
 
     init(
         aspectRatio: AspectRatioOption,
@@ -1413,20 +1442,44 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
 
         guard let data = photo.fileDataRepresentation() else {
             onError("Photo data is unavailable.")
+            // signal in case didFinishCaptureFor is already waiting
+            processingSemaphore.signal()
             return
         }
 
-        processedPhotoData = Self.croppedData(from: data, aspectRatio: aspectRatio)
+        // Keep original data as a fallback if background processing times out
+        originalPhotoData = data
+
+        // Offload heavy cropping/encoding to a background queue
+        processingQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.processedPhotoData = Self.croppedData(from: data, aspectRatio: self.aspectRatio)
+            self.processingSemaphore.signal()
+        }
     }
 
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
         guard !didFinish else { return }
         didFinish = true
 
+
         if let error {
             onError("Photo capture failed: \(error.localizedDescription)")
             cleanup()
             return
+        }
+
+        // Wait for background processing to finish (bounded wait)
+        let waitResult = processingSemaphore.wait(timeout: .now() + 10)
+        if waitResult == .timedOut {
+            // Fallback: if background processing didn't finish, use original data if available
+            if let original = originalPhotoData {
+                processedPhotoData = original
+            } else {
+                onError("Photo processing timed out.")
+                cleanup()
+                return
+            }
         }
 
         guard let processedPhotoData else {
@@ -1466,6 +1519,8 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
         if let livePhotoMovieURL {
             try? FileManager.default.removeItem(at: livePhotoMovieURL)
         }
+        originalPhotoData = nil
+        processingSemaphore.signal()
         onFinish(nil)
     }
 
