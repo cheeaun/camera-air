@@ -1549,7 +1549,7 @@ private final class PhotoCaptureProcessor: NSObject, AVCapturePhotoCaptureDelega
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(
             data,
-            UTType.jpeg.identifier as CFString,
+            UTType.heic.identifier as CFString,
             1,
             nil
         ) else {
