@@ -377,6 +377,29 @@ enum RememberedCameraSetting: String, CaseIterable, Identifiable, Codable {
             return "Front/back camera"
         }
     }
+
+    var defaultValueDescription: String {
+        switch self {
+        case .flash:
+            return "Auto"
+        case .aspectRatio:
+            return "3:4"
+        case .orientation:
+            return "Portrait"
+        case .exposure:
+            return "Unlocked"
+        case .nightMode:
+            return "Auto"
+        case .livePhoto:
+            return "On"
+        case .zoom:
+            return "1x"
+        case .mode:
+            return "Photo"
+        case .lens:
+            return "Back"
+        }
+    }
 }
 
 struct CameraRememberLastSettings: Equatable, Codable {
