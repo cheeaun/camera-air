@@ -284,23 +284,38 @@ struct CameraRootView: View {
             let detentHeight = min(estimatedContentHeight, maxDetentHeight)
 
             NavigationStack {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        sheetHeader
+                VStack(spacing: 0) {
+                    sheetHeader
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                        .padding(.bottom, 12)
+                        .background(
+                            .ultraThinMaterial,
+                            ignoresSafeAreaEdges: .horizontal
+                        )
+                        .overlay(alignment: .bottom) {
+                            Divider()
+                                .background(Color.white.opacity(0.12))
+                        }
+                        .zIndex(1)
 
+                    ScrollView {
                         RememberLastSettingsPanel(
                             rememberLastSettings: controller.rememberLastSettings,
+                            currentSettings: controller.settings,
+                            currentMode: controller.mode,
+                            currentLens: controller.lens,
                             onSettingToggle: { setting, isEnabled in
                                 triggerInterfaceHaptic()
                                 controller.setRememberLastSetting(setting, isEnabled: isEnabled)
                             }
                         )
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                        .padding(.bottom, 34)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                    .padding(.bottom, 34)
+                    .scrollIndicators(.hidden)
                 }
-                .scrollIndicators(.hidden)
             }
             .presentationDetents([.height(detentHeight)])
             .presentationDragIndicator(.hidden)
@@ -435,11 +450,11 @@ struct CameraRootView: View {
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white)
 
-                Text("Remember Last Settings")
+                Text("Preserve Settings")
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white)
 
-                Text("Choose which camera controls restore their last value.")
+                Text("Preserve the last used setting, rather than automatically reset.")
                     .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.46))
                     .fixedSize(horizontal: false, vertical: true)
@@ -1010,6 +1025,9 @@ private struct ExposureLockIcon: View {
 
 private struct RememberLastSettingsPanel: View {
     let rememberLastSettings: CameraRememberLastSettings
+    let currentSettings: CameraSettings
+    let currentMode: CaptureMode
+    let currentLens: CameraLens
     let onSettingToggle: (RememberedCameraSetting, Bool) -> Void
 
     var body: some View {
@@ -1018,6 +1036,7 @@ private struct RememberLastSettingsPanel: View {
                 ToggleRow(
                     title: setting.title,
                     detail: setting.defaultValueDescription,
+                    currentValue: setting.currentValueDescription(settings: currentSettings, mode: currentMode, lens: currentLens),
                     isOn: rememberLastSettings.enabledSettings.contains(setting),
                     isEnabled: rememberLastSettings.isEnabled,
                     onToggle: { isEnabled in
@@ -1032,6 +1051,7 @@ private struct RememberLastSettingsPanel: View {
 private struct ToggleRow: View {
     let title: String
     let detail: String
+    let currentValue: String
     let isOn: Bool
     let isEnabled: Bool
     let onToggle: (Bool) -> Void
@@ -1046,7 +1066,7 @@ private struct ToggleRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
-                Text("Default: \(detail)")
+                Text("Default: \(detail) · Current: \(currentValue)")
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.42))
             }

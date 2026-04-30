@@ -195,6 +195,17 @@ enum AspectOrientation: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    var title: String {
+        switch self {
+        case .portrait:
+            return "Portrait"
+        case .landscape:
+            return "Landscape"
+        case .square:
+            return "Square"
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .portrait:
@@ -400,11 +411,34 @@ enum RememberedCameraSetting: String, CaseIterable, Identifiable, Codable {
             return "Back"
         }
     }
+
+    func currentValueDescription(settings: CameraSettings, mode: CaptureMode, lens: CameraLens) -> String {
+        switch self {
+        case .flash:
+            return settings.flash.title
+        case .aspectRatio:
+            return settings.aspectRatio.title(for: settings.aspectOrientation)
+        case .orientation:
+            return settings.aspectOrientation.title
+        case .exposure:
+            return settings.isExposureLocked ? "Locked" : "Unlocked"
+        case .nightMode:
+            return settings.nightMode.title
+        case .livePhoto:
+            return settings.isLivePhotoEnabled ? "On" : "Off"
+        case .zoom:
+            return settings.zoomLevel.title
+        case .mode:
+            return mode.title
+        case .lens:
+            return lens.title
+        }
+    }
 }
 
 struct CameraRememberLastSettings: Equatable, Codable {
     var isEnabled = true
-    var enabledSettings: Set<RememberedCameraSetting> = Set(RememberedCameraSetting.allCases)
+    var enabledSettings: Set<RememberedCameraSetting> = []
 
     func remembers(_ setting: RememberedCameraSetting) -> Bool {
         isEnabled && enabledSettings.contains(setting)
