@@ -1053,7 +1053,6 @@ private struct ToggleRow: View {
             .foregroundStyle(.white.opacity(isEnabled ? 0.9 : 0.42))
         }
         .toggleStyle(.switch)
-        .tint(.white)
         .disabled(!isEnabled)
         .padding(.vertical, 2)
     }
