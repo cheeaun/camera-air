@@ -277,27 +277,35 @@ struct CameraRootView: View {
     }
 
     private var settingsSheet: some View {
-        NavigationStack {
-            RememberLastSettingsPanel(
-                rememberLastSettings: controller.rememberLastSettings,
-                onMasterToggle: { isEnabled in
-                    triggerInterfaceHaptic()
-                    controller.setRememberLastSettingsEnabled(isEnabled)
-                },
-                onSettingToggle: { setting, isEnabled in
-                    triggerInterfaceHaptic()
-                    controller.setRememberLastSetting(setting, isEnabled: isEnabled)
+        Group {
+            let screenHeight = UIScreen.main.bounds.height
+            let maxDetentHeight = screenHeight * 0.9
+            let estimatedContentHeight = CGFloat(RememberedCameraSetting.allCases.count) * 52 + 104
+            let detentHeight = min(estimatedContentHeight, maxDetentHeight)
+
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        sheetHeader
+
+                        RememberLastSettingsPanel(
+                            rememberLastSettings: controller.rememberLastSettings,
+                            onSettingToggle: { setting, isEnabled in
+                                triggerInterfaceHaptic()
+                                controller.setRememberLastSetting(setting, isEnabled: isEnabled)
+                            }
+                        )
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 34)
                 }
-            )
-            .padding(.top, 12)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
-            .navigationTitle("Remember Last Settings")
-            .navigationBarTitleDisplayMode(.inline)
+                .scrollIndicators(.hidden)
+            }
+            .presentationDetents([.height(detentHeight)])
+            .presentationDragIndicator(.hidden)
+            .presentationBackground(.ultraThinMaterial)
         }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.hidden)
-        .presentationBackground(.ultraThinMaterial)
     }
 
     private var bottomBar: some View {
@@ -418,6 +426,41 @@ struct CameraRootView: View {
 
     private func triggerInterfaceHaptic() {
         CameraHaptics.interface()
+    }
+
+    private var sheetHeader: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Settings")
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text("Remember Last Settings")
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text("Choose which camera controls restore their last value.")
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.46))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                isSettingsExpanded = false
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Color.white.opacity(0.08), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Close settings"))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 4)
+        .padding(.bottom, 2)
     }
 
     private var permissionOverlay: some View {
@@ -967,34 +1010,20 @@ private struct ExposureLockIcon: View {
 
 private struct RememberLastSettingsPanel: View {
     let rememberLastSettings: CameraRememberLastSettings
-    let onMasterToggle: (Bool) -> Void
     let onSettingToggle: (RememberedCameraSetting, Bool) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ToggleRow(
-                title: "Remember last settings",
-                detail: "On",
-                isOn: rememberLastSettings.isEnabled,
-                isEnabled: true,
-                onToggle: onMasterToggle
-            )
-
-            Divider()
-                .overlay(.white.opacity(0.18))
-
-            VStack(spacing: 10) {
-                ForEach(RememberedCameraSetting.allCases) { setting in
-                    ToggleRow(
-                        title: setting.title,
-                        detail: setting.defaultValueDescription,
-                        isOn: rememberLastSettings.enabledSettings.contains(setting),
-                        isEnabled: rememberLastSettings.isEnabled,
-                        onToggle: { isEnabled in
-                            onSettingToggle(setting, isEnabled)
-                        }
-                    )
-                }
+        VStack(spacing: 12) {
+            ForEach(RememberedCameraSetting.allCases) { setting in
+                ToggleRow(
+                    title: setting.title,
+                    detail: setting.defaultValueDescription,
+                    isOn: rememberLastSettings.enabledSettings.contains(setting),
+                    isEnabled: rememberLastSettings.isEnabled,
+                    onToggle: { isEnabled in
+                        onSettingToggle(setting, isEnabled)
+                    }
+                )
             }
         }
     }
@@ -1008,48 +1037,25 @@ private struct ToggleRow: View {
     let onToggle: (Bool) -> Void
 
     var body: some View {
-        Button {
-            guard isEnabled else { return }
-            onToggle(!isOn)
-        } label: {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    Text("Default: \(detail)")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.42))
-                }
-                .foregroundStyle(.white.opacity(isEnabled ? 0.9 : 0.42))
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack(spacing: 0) {
-                    Circle()
-                        .fill(isOn ? Color.white : Color.white.opacity(0.72))
-                        .overlay {
-                            Circle()
-                                .inset(by: 4)
-                                .fill(isOn ? Color.black : Color.black.opacity(0.7))
-                        }
-                        .frame(width: 16, height: 16)
-                        .offset(x: isOn ? 10 : -10)
-                }
-                .frame(width: 38, height: 24)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(isOn ? Color(red: 0.96, green: 0.96, blue: 0.96) : Color.white.opacity(0.22))
-                )
-                .overlay(
-                    Capsule(style: .continuous)
-                        .strokeBorder(Color.white.opacity(isEnabled ? 0.24 : 0.08), lineWidth: 1)
-                )
+        Toggle(isOn: Binding(
+            get: { isOn },
+            set: { newValue in
+                onToggle(newValue)
             }
-            .contentShape(Rectangle())
-            .frame(minHeight: 34)
+        )) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                Text("Default: \(detail)")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.42))
+            }
+            .foregroundStyle(.white.opacity(isEnabled ? 0.9 : 0.42))
         }
-        .buttonStyle(.plain)
+        .toggleStyle(.switch)
+        .tint(.white)
         .disabled(!isEnabled)
-        .animation(.snappy(duration: 0.18), value: isOn)
+        .padding(.vertical, 2)
     }
 }
 
