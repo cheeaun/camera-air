@@ -47,9 +47,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private var recordingStartTime: Date?
     private var recordingTimer: Timer?
     
-    // Video data output for lightweight preview sampling (used for night badge estimation)
-    private let videoDataOutput = AVCaptureVideoDataOutput()
-
     // Remember a user's Live Photo preference so we can restore it after night mode changes
     private var previousLivePhotoEnabled: Bool?
     private var currentVideoInput: AVCaptureDeviceInput?
@@ -68,6 +65,30 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     private let displayZoomCeiling: CGFloat = 10.0
     private let livePhotoSupportOverride: Bool?
+    // Low-power preview: keep preview in a lower-power preset (.high)
+    // and temporarily expand to `.photo` when the user interacts.
+    private var lowPowerPreviewEnabled = true
+    private var isPreviewTemporarilyExpanded = false
+    private var previewRevertWorkItem: DispatchWorkItem?
+    private let previewExpandedDuration: TimeInterval = 3.0
+
+    // Idle timer: drops session preset after a period of inactivity to reduce heat
+    private var idleWorkItem: DispatchWorkItem?
+    private let idleTimeout: TimeInterval = 60
+    private var isIdleModeActive = false
+
+    /// Whether low-power preview should be used, considering the current lens.
+    /// Ultra wide (0.5x) may not support Live Photo with `.high` preset.
+    private var shouldUseLowPowerPreview: Bool {
+        guard lowPowerPreviewEnabled else { return false }
+        if currentVideoInput?.device.deviceType == .builtInUltraWideCamera {
+            return false
+        }
+        if settings.isLivePhotoEnabled {
+            return false
+        }
+        return true
+    }
 
     override init() {
         let env = ProcessInfo.processInfo.environment
@@ -279,9 +300,11 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             strongSelf.session.startRunning()
             strongSelf.startRecordingIfNeeded()
         }
+        scheduleIdleTimer()
     }
 
     func pauseSession() {
+        cancelIdleTimer()
         sessionQueue.async { [weak self] in
             guard let strongSelf = self, strongSelf.session.isRunning else { return }
             if strongSelf.movieOutput.isRecording {
@@ -294,6 +317,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     func setMode(_ mode: CaptureMode) {
         guard self.mode != mode else { return }
+        userDidInteract()
         publish {
             self.mode = mode
         }
@@ -304,21 +328,30 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         sessionQueue.async { [weak self] in
             guard let strongSelf = self else { return }
             strongSelf.session.beginConfiguration()
-            strongSelf.session.sessionPreset = mode == .photo ? .photo : .high
+            // Use a lower-power preset for preview by default. Expand to `.photo` only
+            // when user interaction requires full photo-quality pipeline.
+            strongSelf.session.sessionPreset = strongSelf.shouldUseLowPowerPreview ? .high : .photo
             strongSelf.configureMovieOutput(for: mode)
             strongSelf.session.commitConfiguration()
             strongSelf.updatePhotoOutputDimensions()
             strongSelf.applyCaptureSettings()
             strongSelf.startRecordingIfNeeded()
         }
+        // If user explicitly selected photo mode while low-power preview is enabled,
+        // expand preview temporarily to give immediate full-quality feedback.
+        if shouldUseLowPowerPreview && mode == .photo {
+            expandPreviewForInteraction()
+        }
     }
 
     func switchLens() {
+        userDidInteract()
         setLens(lens == .back ? .front : .back)
     }
 
     func setLens(_ lens: CameraLens) {
         guard self.lens != lens else { return }
+        userDidInteract()
         publish {
             self.lens = lens
         }
@@ -362,19 +395,24 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             strongSelf.saveSettings(for: .zoom)
             strongSelf.startRecordingIfNeeded()
         }
+        // expand preview when user switches lenses
+        expandPreviewForInteraction()
     }
 
     func setFlash(_ flash: FlashPreference) {
         guard settings.flash != flash else { return }
+        userDidInteract()
         publish {
             self.settings.flash = flash
         }
         saveSettings(for: .flash)
         triggerSelectionFeedback()
         showTransientToast("Flash \(flash.title.lowercased())")
+        expandPreviewForInteraction()
     }
 
     func toggleLivePhoto() {
+        userDidInteract()
         let isEnabled = !settings.isLivePhotoEnabled
         publish {
             self.settings.isLivePhotoEnabled.toggle()
@@ -385,9 +423,11 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
         }
+        expandPreviewForInteraction()
     }
 
     func toggleExposureLock() {
+        userDidInteract()
         let isLocked = !settings.isExposureLocked
         publish {
             self.settings.isExposureLocked.toggle()
@@ -398,6 +438,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
         }
+        expandPreviewForInteraction()
     }
 
     func setAspectRatio(_ aspectRatio: AspectRatioOption) {
@@ -411,6 +452,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
         let nextAspectRatio = nextOrientation.coercedAspectRatio(normalizedAspectRatio)
         guard settings.aspectRatio != nextAspectRatio || settings.aspectOrientation != nextOrientation else { return }
+        userDidInteract()
         publish {
             self.settings.aspectRatio = nextAspectRatio
             self.settings.aspectOrientation = nextOrientation
@@ -423,6 +465,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     func cycleAspectRatio() {
         guard !settings.aspectOrientation.isSquare else { return }
+        userDidInteract()
 
         let allCases = settings.aspectOrientation.selectableAspectRatios
         let currentAspectRatio = settings.aspectOrientation.coercedAspectRatio(settings.aspectRatio)
@@ -432,6 +475,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func cycleAspectOrientation() {
+        userDidInteract()
         let currentOrientation = settings.aspectOrientation
         let nextOrientation: AspectOrientation
         let nextAspectRatio: AspectRatioOption
@@ -459,6 +503,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     func setNightMode(_ nightMode: NightModePreference) {
         guard settings.nightMode != nightMode else { return }
+        userDidInteract()
         publish {
             self.settings.nightMode = nightMode
         }
@@ -469,9 +514,11 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
         }
+        expandPreviewForInteraction()
     }
 
     func cycleNightMode() {
+        userDidInteract()
         if settings.nightMode == .off {
             setNightMode(.auto)
         } else {
@@ -484,6 +531,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func setCustomZoomFactor(_ factor: CGFloat, persist: Bool = false, animated: Bool = false) {
+        userDidInteract()
         let clampedFactor = clampedDisplayZoomFactor(factor)
         publish {
             self.settings.customZoomFactor = clampedFactor
@@ -492,16 +540,20 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         if persist {
             saveSettings(for: .zoom)
         }
+        // Expand preview while user is interacting with zoom.
+        expandPreviewForInteraction()
         sessionQueue.async { [weak self] in
             self?.applyZoomSettings(animated: animated)
         }
     }
 
     func commitZoomSelection() {
+        userDidInteract()
         saveSettings(for: .zoom)
     }
 
     func performPrimaryAction() {
+        userDidInteract()
         switch mode {
         case .photo:
             capturePhoto()
@@ -512,6 +564,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     func handleDeepLink(_ url: URL) {
         guard let route = CameraRoute(url: url) else { return }
+        userDidInteract()
         pendingRoute = route
         setMode(route.mode)
         setLens(route.lens)
@@ -576,7 +629,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             guard let strongSelf = self, !strongSelf.isConfigured else { return }
 
             strongSelf.session.beginConfiguration()
-            strongSelf.session.sessionPreset = .photo
+            // Start preview in a lower-power preset by default; expand to `.photo`
+            // only when the user interacts.
+            strongSelf.session.sessionPreset = strongSelf.shouldUseLowPowerPreview ? .high : .photo
 
             if let videoDevice = strongSelf.discoverDevice(for: strongSelf.lens.capturePosition),
                let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
@@ -585,28 +640,13 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 strongSelf.currentVideoInput = videoInput
             }
 
-            if includeAudio,
-               let audioDevice = AVCaptureDevice.default(for: .audio),
-               let audioInput = try? AVCaptureDeviceInput(device: audioDevice),
-               strongSelf.session.canAddInput(audioInput) {
+            if includeAudio {
                 strongSelf.configureAudioSessionForHapticsDuringRecording()
-                strongSelf.session.addInput(audioInput)
-                strongSelf.currentAudioInput = audioInput
             }
 
             if strongSelf.session.canAddOutput(strongSelf.photoOutput) {
                 strongSelf.session.addOutput(strongSelf.photoOutput)
                 strongSelf.photoOutput.maxPhotoQualityPrioritization = .speed
-            }
-
-            // Add a lightweight video data output for preview-sampling (disabled delegate by default)
-            if strongSelf.session.canAddOutput(strongSelf.videoDataOutput) {
-                strongSelf.videoDataOutput.alwaysDiscardsLateVideoFrames = true
-                strongSelf.videoDataOutput.videoSettings = [
-                    kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
-                ]
-                strongSelf.videoDataOutput.setSampleBufferDelegate(nil, queue: nil)
-                strongSelf.session.addOutput(strongSelf.videoDataOutput)
             }
 
             strongSelf.configureMovieOutput(for: strongSelf.mode)
@@ -618,12 +658,14 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 strongSelf.refreshCapabilities()
                 strongSelf.applyCaptureSettings()
+                strongSelf.scheduleIdleTimer()
             }
             strongSelf.startRecordingIfNeeded()
         }
     }
 
     private func capturePhoto() {
+        userDidInteract()
         triggerCaptureFeedback()
         sessionQueue.async { [weak self] in
             guard let strongSelf = self, strongSelf.isConfigured, strongSelf.session.isRunning else { return }
@@ -729,6 +771,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         triggerCaptureFeedback()
         sessionQueue.async { [weak self] in
             guard let strongSelf = self, strongSelf.isConfigured, !strongSelf.movieOutput.isRecording else { return }
+            strongSelf.ensureAudioInput()
             let outputURL = Self.temporaryFileURL(pathExtension: "mov")
             strongSelf.recordingAspectRatio = strongSelf.settings.aspectRatio
             strongSelf.applyTorchState(isEnabled: strongSelf.settings.flash == .on)
@@ -774,6 +817,28 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         publish {
             self.recordingDuration = 0
         }
+    }
+
+    // Adds audio input to the session on-demand (for video recording).
+    private func ensureAudioInput() {
+        guard currentAudioInput == nil else { return }
+        guard let audioDevice = AVCaptureDevice.default(for: .audio),
+              let audioInput = try? AVCaptureDeviceInput(device: audioDevice),
+              session.canAddInput(audioInput) else { return }
+        session.beginConfiguration()
+        session.addInput(audioInput)
+        session.commitConfiguration()
+        currentAudioInput = audioInput
+    }
+
+    // Removes audio input from the session when recording stops.
+    // Must be called on the session queue.
+    private func removeAudioInput() {
+        guard let audioInput = currentAudioInput else { return }
+        session.beginConfiguration()
+        session.removeInput(audioInput)
+        session.commitConfiguration()
+        currentAudioInput = nil
     }
 
     private func applyCaptureSettings() {
@@ -1149,11 +1214,114 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
     }
 
+    // Resets the idle timer on user interaction.
+    private func userDidInteract() {
+        cancelIdleTimer()
+        exitIdleMode()
+        scheduleIdleTimer()
+    }
+
+    private func scheduleIdleTimer() {
+        guard session.isRunning, !movieOutput.isRecording else { return }
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.enterIdleMode()
+        }
+        idleWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + idleTimeout, execute: workItem)
+    }
+
+    private func cancelIdleTimer() {
+        idleWorkItem?.cancel()
+        idleWorkItem = nil
+    }
+
+    private func enterIdleMode() {
+        guard !isIdleModeActive, !movieOutput.isRecording else { return }
+        isIdleModeActive = true
+        sessionQueue.async { [weak self] in
+            guard let self, self.session.isRunning, !self.movieOutput.isRecording else { return }
+            if self.session.sessionPreset != .medium {
+                self.session.beginConfiguration()
+                self.session.sessionPreset = .medium
+                self.session.commitConfiguration()
+                self.updatePhotoOutputDimensions()
+            }
+        }
+    }
+
+    private func exitIdleMode() {
+        guard isIdleModeActive else { return }
+        isIdleModeActive = false
+        sessionQueue.async { [weak self] in
+            guard let self, self.session.isRunning else { return }
+            let targetPreset: AVCaptureSession.Preset = self.shouldUseLowPowerPreview ? .high : .photo
+            if self.session.sessionPreset != targetPreset {
+                self.session.beginConfiguration()
+                self.session.sessionPreset = targetPreset
+                self.session.commitConfiguration()
+                self.updatePhotoOutputDimensions()
+                self.applyCaptureSettings()
+            }
+        }
+    }
+
     private func publish(_ updates: @Sendable @escaping () -> Void) {
         if Thread.isMainThread {
             updates()
         } else {
             DispatchQueue.main.async(execute: updates)
+        }
+    }
+
+    // Temporarily expand preview to full photo pipeline for user interactions.
+    private func expandPreviewForInteraction(duration: TimeInterval? = nil) {
+        let duration = duration ?? previewExpandedDuration
+        sessionQueue.async { [weak self] in
+            guard let strongSelf = self, strongSelf.shouldUseLowPowerPreview else { return }
+            // Cancel any existing revert task and reschedule.
+            strongSelf.previewRevertWorkItem?.cancel()
+
+            if strongSelf.isPreviewTemporarilyExpanded {
+                // Already expanded; just reschedule revert.
+                let workItem = DispatchWorkItem { [weak self] in
+                    self?.revertPreviewIfNeeded()
+                }
+                strongSelf.previewRevertWorkItem = workItem
+                strongSelf.sessionQueue.asyncAfter(deadline: .now() + duration, execute: workItem)
+                return
+            }
+
+            strongSelf.isPreviewTemporarilyExpanded = true
+            // Switch to full-photo preset for better capture responsiveness.
+            strongSelf.session.beginConfiguration()
+            strongSelf.session.sessionPreset = .photo
+            strongSelf.session.commitConfiguration()
+            strongSelf.updatePhotoOutputDimensions()
+            strongSelf.applyCaptureSettings()
+
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.revertPreviewIfNeeded()
+            }
+            strongSelf.previewRevertWorkItem = workItem
+            strongSelf.sessionQueue.asyncAfter(deadline: .now() + duration, execute: workItem)
+        }
+    }
+
+    private func revertPreviewIfNeeded() {
+        sessionQueue.async { [weak self] in
+            guard let strongSelf = self else { return }
+            strongSelf.previewRevertWorkItem = nil
+            guard strongSelf.shouldUseLowPowerPreview && strongSelf.isPreviewTemporarilyExpanded else { return }
+            // Don't revert while recording.
+            if strongSelf.movieOutput.isRecording { return }
+            strongSelf.isPreviewTemporarilyExpanded = false
+            if strongSelf.session.sessionPreset != .high {
+                strongSelf.session.beginConfiguration()
+                strongSelf.session.sessionPreset = .high
+                strongSelf.session.commitConfiguration()
+                strongSelf.updatePhotoOutputDimensions()
+                strongSelf.applyCaptureSettings()
+            }
         }
     }
 
@@ -1219,6 +1387,9 @@ extension CameraSessionController: AVCaptureFileOutputRecordingDelegate {
             self.isRecording = false
         }
         stopRecordingTimer()
+        sessionQueue.async { [weak self] in
+            self?.removeAudioInput()
+        }
 
         guard error == nil else {
             showTransientError("Video capture failed.")
