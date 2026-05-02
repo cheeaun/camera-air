@@ -1240,11 +1240,23 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         isIdleModeActive = true
         sessionQueue.async { [weak self] in
             guard let self, self.session.isRunning, !self.movieOutput.isRecording else { return }
-            if self.session.sessionPreset != .medium {
+            if self.session.sessionPreset != .high {
                 self.session.beginConfiguration()
-                self.session.sessionPreset = .medium
+                self.session.sessionPreset = .high
                 self.session.commitConfiguration()
                 self.updatePhotoOutputDimensions()
+            }
+            guard let device = self.currentVideoInput?.device else { return }
+            let ranges = device.activeFormat.videoSupportedFrameRateRanges
+            let targetDuration = CMTime(value: 1, timescale: 10)
+            let supportsLowFps = ranges.contains { CMTimeCompare($0.minFrameDuration, targetDuration) <= 0 }
+            if supportsLowFps {
+                do {
+                    try device.lockForConfiguration()
+                    device.activeVideoMinFrameDuration = targetDuration
+                    device.activeVideoMaxFrameDuration = targetDuration
+                    device.unlockForConfiguration()
+                } catch {}
             }
         }
     }
@@ -1261,6 +1273,18 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 self.session.commitConfiguration()
                 self.updatePhotoOutputDimensions()
                 self.applyCaptureSettings()
+            }
+            guard let device = self.currentVideoInput?.device else { return }
+            let ranges = device.activeFormat.videoSupportedFrameRateRanges
+            let defaultDuration = CMTime(value: 1, timescale: 30)
+            let supportsDefaultFps = ranges.contains { CMTimeCompare($0.maxFrameDuration, defaultDuration) >= 0 }
+            if supportsDefaultFps {
+                do {
+                    try device.lockForConfiguration()
+                    device.activeVideoMinFrameDuration = defaultDuration
+                    device.activeVideoMaxFrameDuration = defaultDuration
+                    device.unlockForConfiguration()
+                } catch {}
             }
         }
     }
