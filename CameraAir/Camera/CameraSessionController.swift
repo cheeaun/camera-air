@@ -407,6 +407,38 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
     }
 
+    func handleFocusAndExposureTap(at devicePoint: CGPoint) {
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.currentVideoInput?.device else { return }
+            guard device.isFocusPointOfInterestSupported || device.isExposurePointOfInterestSupported else { return }
+
+            do {
+                try device.lockForConfiguration()
+
+                if device.isFocusPointOfInterestSupported {
+                    device.focusPointOfInterest = devicePoint
+                    device.focusMode = .autoFocus
+                }
+
+                if device.isExposurePointOfInterestSupported {
+                    device.exposurePointOfInterest = devicePoint
+                    device.exposureMode = .autoExpose
+                }
+
+                device.unlockForConfiguration()
+            } catch {
+                self.showTransientError("Unable to adjust exposure.")
+                return
+            }
+
+            self.publish {
+                if !self.settings.isExposureLocked {
+                    self.settings.isExposureLocked = true
+                }
+            }
+        }
+    }
+
     func setAspectRatio(_ aspectRatio: AspectRatioOption) {
         let normalizedAspectRatio = aspectRatio.normalized
         let nextOrientation: AspectOrientation = if normalizedAspectRatio.isSquare {

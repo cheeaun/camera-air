@@ -136,7 +136,10 @@ struct CameraRootView: View {
             }
 
             return CameraPreviewView(
-                session: controller.session
+                session: controller.session,
+                onTapDevicePoint: { devicePoint in
+                    controller.handleFocusAndExposureTap(at: devicePoint)
+                }
             )
                 .frame(width: fitWidth, height: fitHeight)
                 .clipped()
