@@ -69,12 +69,13 @@ final class PreviewContainerView: UIView {
             width: boxSize,
             height: boxSize
         )
-        let path = UIBezierPath(roundedRect: boxRect, cornerRadius: 8)
+        let path = UIBezierPath(roundedRect: CGRect(origin: .zero, size: boxRect.size), cornerRadius: 8)
         let newLayer = CAShapeLayer()
         newLayer.path = path.cgPath
         newLayer.strokeColor = UIColor.yellow.cgColor
         newLayer.fillColor = UIColor.clear.cgColor
         newLayer.lineWidth = 2
+        newLayer.frame = boxRect
         newLayer.opacity = 0
         newLayer.transform = CATransform3DMakeScale(0.6, 0.6, 1)
 

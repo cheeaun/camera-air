@@ -408,6 +408,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func handleFocusAndExposureTap(at devicePoint: CGPoint) {
+        triggerSelectionFeedback()
+
         sessionQueue.async { [weak self] in
             guard let self, let device = self.currentVideoInput?.device else { return }
             guard device.isFocusPointOfInterestSupported || device.isExposurePointOfInterestSupported else { return }
@@ -431,9 +433,11 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 return
             }
 
+            let wasAlreadyLocked = self.settings.isExposureLocked
             self.publish {
-                if !self.settings.isExposureLocked {
+                if !wasAlreadyLocked {
                     self.settings.isExposureLocked = true
+                    self.showTransientToast("Exposure locked")
                 }
             }
         }
