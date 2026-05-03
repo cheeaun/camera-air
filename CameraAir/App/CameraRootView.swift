@@ -668,7 +668,6 @@ private struct ZoomFactorSlider: View {
             let labelY: CGFloat = isDragging ? trackY - 28 : trackY - 14
 
             ZStack(alignment: .top) {
-                // Compute tick positions for this layout width (fast, small array)
                 let positions: [CGFloat] = {
                     let logLower = log(range.lowerBound)
                     let logUpper = log(range.upperBound)
@@ -706,36 +705,7 @@ private struct ZoomFactorSlider: View {
             }
             .animation(.easeIn(duration: 0.1), value: isDragging)
             .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { gesture in
-                        if !isDragging {
-                            isDragging = true
-                            onEditingChanged(true)
-                            dragHapticTick = hapticTickIndex(for: value)
-                            CameraHaptics.light()
-                        }
-                        dragX = gesture.location.x
-                        let rawFactor = factor(for: gesture.location.x, in: width)
-                        let clampedFactor = clamp(rawFactor, range: range)
-                        value = clampedFactor
-
-                        let newTick = hapticTickIndex(for: clampedFactor)
-                        if newTick != dragHapticTick {
-                            dragHapticTick = newTick
-                            CameraHaptics.light()
-                        }
-                    }
-                    .onEnded { _ in
-                        isDragging = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                            if !isDragging {
-                                dragX = 0
-                            }
-                        }
-                        onEditingChanged(false)
-                    }
-            )
+            .gesture(dragGesture(in: width))
         }
         .frame(height: 20)
     }
@@ -782,6 +752,8 @@ private struct ZoomFactorSlider: View {
                     .position(x: position, y: 14)
                 }
             }
+            .contentShape(Rectangle())
+            .simultaneousGesture(dragGesture(in: width))
         }
         .frame(height: 28)
     }
@@ -868,6 +840,37 @@ private struct ZoomFactorSlider: View {
         let logFactor = logLower + (logUpper - logLower) * logProgress
         let factor = exp(logFactor)
         return abs(factor - 1.0) < 0.05 || index == 0 || index == total - 1
+    }
+
+    private func dragGesture(in width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { gesture in
+                if !isDragging {
+                    isDragging = true
+                    onEditingChanged(true)
+                    dragHapticTick = hapticTickIndex(for: value)
+                    CameraHaptics.light()
+                }
+                dragX = gesture.location.x
+                let rawFactor = factor(for: gesture.location.x, in: width)
+                let clampedFactor = clamp(rawFactor, range: range)
+                value = clampedFactor
+
+                let newTick = hapticTickIndex(for: clampedFactor)
+                if newTick != dragHapticTick {
+                    dragHapticTick = newTick
+                    CameraHaptics.light()
+                }
+            }
+            .onEnded { _ in
+                isDragging = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    if !isDragging {
+                        dragX = 0
+                    }
+                }
+                onEditingChanged(false)
+            }
     }
 
     private func clamp(_ value: CGFloat, range: ClosedRange<CGFloat>) -> CGFloat {
