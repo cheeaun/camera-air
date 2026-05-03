@@ -72,11 +72,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private var previewRevertWorkItem: DispatchWorkItem?
     private let previewExpandedDuration: TimeInterval = 3.0
 
-    // Idle timer: drops session preset after a period of inactivity to reduce heat
-    private var idleWorkItem: DispatchWorkItem?
-    private let idleTimeout: TimeInterval = 60
-    private var isIdleModeActive = false
-
     /// Whether low-power preview should be used, considering the current lens.
     /// Ultra wide (0.5x) may not support Live Photo with `.high` preset.
     private var shouldUseLowPowerPreview: Bool {
@@ -300,11 +295,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             strongSelf.session.startRunning()
             strongSelf.startRecordingIfNeeded()
         }
-        scheduleIdleTimer()
     }
 
     func pauseSession() {
-        cancelIdleTimer()
         sessionQueue.async { [weak self] in
             guard let strongSelf = self, strongSelf.session.isRunning else { return }
             if strongSelf.movieOutput.isRecording {
@@ -317,7 +310,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     func setMode(_ mode: CaptureMode) {
         guard self.mode != mode else { return }
-        userDidInteract()
+
         publish {
             self.mode = mode
         }
@@ -345,13 +338,12 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func switchLens() {
-        userDidInteract()
         setLens(lens == .back ? .front : .back)
     }
 
     func setLens(_ lens: CameraLens) {
         guard self.lens != lens else { return }
-        userDidInteract()
+
         publish {
             self.lens = lens
         }
@@ -401,7 +393,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     func setFlash(_ flash: FlashPreference) {
         guard settings.flash != flash else { return }
-        userDidInteract()
+
         publish {
             self.settings.flash = flash
         }
@@ -412,7 +404,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func toggleLivePhoto() {
-        userDidInteract()
+
         let isEnabled = !settings.isLivePhotoEnabled
         publish {
             self.settings.isLivePhotoEnabled.toggle()
@@ -427,7 +419,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func toggleExposureLock() {
-        userDidInteract()
+
         let isLocked = !settings.isExposureLocked
         publish {
             self.settings.isExposureLocked.toggle()
@@ -452,7 +444,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
         let nextAspectRatio = nextOrientation.coercedAspectRatio(normalizedAspectRatio)
         guard settings.aspectRatio != nextAspectRatio || settings.aspectOrientation != nextOrientation else { return }
-        userDidInteract()
+
         publish {
             self.settings.aspectRatio = nextAspectRatio
             self.settings.aspectOrientation = nextOrientation
@@ -465,7 +457,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     func cycleAspectRatio() {
         guard !settings.aspectOrientation.isSquare else { return }
-        userDidInteract()
+
 
         let allCases = settings.aspectOrientation.selectableAspectRatios
         let currentAspectRatio = settings.aspectOrientation.coercedAspectRatio(settings.aspectRatio)
@@ -475,7 +467,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func cycleAspectOrientation() {
-        userDidInteract()
+
         let currentOrientation = settings.aspectOrientation
         let nextOrientation: AspectOrientation
         let nextAspectRatio: AspectRatioOption
@@ -503,7 +495,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     func setNightMode(_ nightMode: NightModePreference) {
         guard settings.nightMode != nightMode else { return }
-        userDidInteract()
+
         publish {
             self.settings.nightMode = nightMode
         }
@@ -518,7 +510,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func cycleNightMode() {
-        userDidInteract()
+
         if settings.nightMode == .off {
             setNightMode(.auto)
         } else {
@@ -531,7 +523,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func setCustomZoomFactor(_ factor: CGFloat, persist: Bool = false, animated: Bool = false) {
-        userDidInteract()
+
         let clampedFactor = clampedDisplayZoomFactor(factor)
         publish {
             self.settings.customZoomFactor = clampedFactor
@@ -548,12 +540,12 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     func commitZoomSelection() {
-        userDidInteract()
+
         saveSettings(for: .zoom)
     }
 
     func performPrimaryAction() {
-        userDidInteract()
+
         switch mode {
         case .photo:
             capturePhoto()
@@ -564,7 +556,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     func handleDeepLink(_ url: URL) {
         guard let route = CameraRoute(url: url) else { return }
-        userDidInteract()
+
         pendingRoute = route
         setMode(route.mode)
         setLens(route.lens)
@@ -658,14 +650,13 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 strongSelf.refreshCapabilities()
                 strongSelf.applyCaptureSettings()
-                strongSelf.scheduleIdleTimer()
             }
             strongSelf.startRecordingIfNeeded()
         }
     }
 
     private func capturePhoto() {
-        userDidInteract()
+
         triggerCaptureFeedback()
         sessionQueue.async { [weak self] in
             guard let strongSelf = self, strongSelf.isConfigured, strongSelf.session.isRunning else { return }
@@ -1210,81 +1201,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             self.recentCaptureAssets.insert(asset, at: 0)
             if self.recentCaptureAssets.count > Self.maxRecentCaptureCount {
                 self.recentCaptureAssets = Array(self.recentCaptureAssets.prefix(Self.maxRecentCaptureCount))
-            }
-        }
-    }
-
-    // Resets the idle timer on user interaction.
-    private func userDidInteract() {
-        cancelIdleTimer()
-        exitIdleMode()
-        scheduleIdleTimer()
-    }
-
-    private func scheduleIdleTimer() {
-        guard session.isRunning, !movieOutput.isRecording else { return }
-        let workItem = DispatchWorkItem { [weak self] in
-            self?.enterIdleMode()
-        }
-        idleWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + idleTimeout, execute: workItem)
-    }
-
-    private func cancelIdleTimer() {
-        idleWorkItem?.cancel()
-        idleWorkItem = nil
-    }
-
-    private func enterIdleMode() {
-        guard !isIdleModeActive, !movieOutput.isRecording else { return }
-        isIdleModeActive = true
-        sessionQueue.async { [weak self] in
-            guard let self, self.session.isRunning, !self.movieOutput.isRecording else { return }
-            if self.session.sessionPreset != .high {
-                self.session.beginConfiguration()
-                self.session.sessionPreset = .high
-                self.session.commitConfiguration()
-                self.updatePhotoOutputDimensions()
-            }
-            guard let device = self.currentVideoInput?.device else { return }
-            let ranges = device.activeFormat.videoSupportedFrameRateRanges
-            let targetDuration = CMTime(value: 1, timescale: 10)
-            let supportsLowFps = ranges.contains { CMTimeCompare($0.minFrameDuration, targetDuration) <= 0 }
-            if supportsLowFps {
-                do {
-                    try device.lockForConfiguration()
-                    device.activeVideoMinFrameDuration = targetDuration
-                    device.activeVideoMaxFrameDuration = targetDuration
-                    device.unlockForConfiguration()
-                } catch {}
-            }
-        }
-    }
-
-    private func exitIdleMode() {
-        guard isIdleModeActive else { return }
-        isIdleModeActive = false
-        sessionQueue.async { [weak self] in
-            guard let self, self.session.isRunning else { return }
-            let targetPreset: AVCaptureSession.Preset = self.shouldUseLowPowerPreview ? .high : .photo
-            if self.session.sessionPreset != targetPreset {
-                self.session.beginConfiguration()
-                self.session.sessionPreset = targetPreset
-                self.session.commitConfiguration()
-                self.updatePhotoOutputDimensions()
-                self.applyCaptureSettings()
-            }
-            guard let device = self.currentVideoInput?.device else { return }
-            let ranges = device.activeFormat.videoSupportedFrameRateRanges
-            let defaultDuration = CMTime(value: 1, timescale: 30)
-            let supportsDefaultFps = ranges.contains { CMTimeCompare($0.maxFrameDuration, defaultDuration) >= 0 }
-            if supportsDefaultFps {
-                do {
-                    try device.lockForConfiguration()
-                    device.activeVideoMinFrameDuration = defaultDuration
-                    device.activeVideoMaxFrameDuration = defaultDuration
-                    device.unlockForConfiguration()
-                } catch {}
             }
         }
     }
