@@ -65,25 +65,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     private let displayZoomCeiling: CGFloat = 10.0
     private let livePhotoSupportOverride: Bool?
-    // Low-power preview: keep preview in a lower-power preset (.high)
-    // and temporarily expand to `.photo` when the user interacts.
-    private var lowPowerPreviewEnabled = true
-    private var isPreviewTemporarilyExpanded = false
-    private var previewRevertWorkItem: DispatchWorkItem?
-    private let previewExpandedDuration: TimeInterval = 3.0
-
-    /// Whether low-power preview should be used, considering the current lens.
-    /// Ultra wide (0.5x) may not support Live Photo with `.high` preset.
-    private var shouldUseLowPowerPreview: Bool {
-        guard lowPowerPreviewEnabled else { return false }
-        if currentVideoInput?.device.deviceType == .builtInUltraWideCamera {
-            return false
-        }
-        if settings.isLivePhotoEnabled {
-            return false
-        }
-        return true
-    }
 
     override init() {
         let env = ProcessInfo.processInfo.environment
@@ -323,18 +304,15 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             strongSelf.session.beginConfiguration()
             // Use a lower-power preset for preview by default. Expand to `.photo` only
             // when user interaction requires full photo-quality pipeline.
-            strongSelf.session.sessionPreset = strongSelf.shouldUseLowPowerPreview ? .high : .photo
+            strongSelf.session.sessionPreset = .photo
             strongSelf.configureMovieOutput(for: mode)
             strongSelf.session.commitConfiguration()
             strongSelf.updatePhotoOutputDimensions()
             strongSelf.applyCaptureSettings()
             strongSelf.startRecordingIfNeeded()
         }
-        // If user explicitly selected photo mode while low-power preview is enabled,
-        // expand preview temporarily to give immediate full-quality feedback.
-        if shouldUseLowPowerPreview && mode == .photo {
-            expandPreviewForInteraction()
-        }
+
+        // expand preview when user switches lenses
     }
 
     func switchLens() {
@@ -388,7 +366,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             strongSelf.startRecordingIfNeeded()
         }
         // expand preview when user switches lenses
-        expandPreviewForInteraction()
     }
 
     func setFlash(_ flash: FlashPreference) {
@@ -400,7 +377,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         saveSettings(for: .flash)
         triggerSelectionFeedback()
         showTransientToast("Flash \(flash.title.lowercased())")
-        expandPreviewForInteraction()
     }
 
     func toggleLivePhoto() {
@@ -415,7 +391,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
         }
-        expandPreviewForInteraction()
     }
 
     func toggleExposureLock() {
@@ -430,7 +405,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
         }
-        expandPreviewForInteraction()
     }
 
     func setAspectRatio(_ aspectRatio: AspectRatioOption) {
@@ -506,7 +480,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
         }
-        expandPreviewForInteraction()
     }
 
     func cycleNightMode() {
@@ -533,7 +506,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             saveSettings(for: .zoom)
         }
         // Expand preview while user is interacting with zoom.
-        expandPreviewForInteraction()
         sessionQueue.async { [weak self] in
             self?.applyZoomSettings(animated: animated)
         }
@@ -623,7 +595,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             strongSelf.session.beginConfiguration()
             // Start preview in a lower-power preset by default; expand to `.photo`
             // only when the user interacts.
-            strongSelf.session.sessionPreset = strongSelf.shouldUseLowPowerPreview ? .high : .photo
+            strongSelf.session.sessionPreset = .photo
 
             if let videoDevice = strongSelf.discoverDevice(for: strongSelf.lens.capturePosition),
                let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
@@ -1213,57 +1185,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
     }
 
-    // Temporarily expand preview to full photo pipeline for user interactions.
-    private func expandPreviewForInteraction(duration: TimeInterval? = nil) {
-        let duration = duration ?? previewExpandedDuration
-        sessionQueue.async { [weak self] in
-            guard let strongSelf = self, strongSelf.shouldUseLowPowerPreview else { return }
-            // Cancel any existing revert task and reschedule.
-            strongSelf.previewRevertWorkItem?.cancel()
-
-            if strongSelf.isPreviewTemporarilyExpanded {
-                // Already expanded; just reschedule revert.
-                let workItem = DispatchWorkItem { [weak self] in
-                    self?.revertPreviewIfNeeded()
-                }
-                strongSelf.previewRevertWorkItem = workItem
-                strongSelf.sessionQueue.asyncAfter(deadline: .now() + duration, execute: workItem)
-                return
-            }
-
-            strongSelf.isPreviewTemporarilyExpanded = true
-            // Switch to full-photo preset for better capture responsiveness.
-            strongSelf.session.beginConfiguration()
-            strongSelf.session.sessionPreset = .photo
-            strongSelf.session.commitConfiguration()
-            strongSelf.updatePhotoOutputDimensions()
-            strongSelf.applyCaptureSettings()
-
-            let workItem = DispatchWorkItem { [weak self] in
-                self?.revertPreviewIfNeeded()
-            }
-            strongSelf.previewRevertWorkItem = workItem
-            strongSelf.sessionQueue.asyncAfter(deadline: .now() + duration, execute: workItem)
-        }
-    }
-
-    private func revertPreviewIfNeeded() {
-        sessionQueue.async { [weak self] in
-            guard let strongSelf = self else { return }
-            strongSelf.previewRevertWorkItem = nil
-            guard strongSelf.shouldUseLowPowerPreview && strongSelf.isPreviewTemporarilyExpanded else { return }
-            // Don't revert while recording.
-            if strongSelf.movieOutput.isRecording { return }
-            strongSelf.isPreviewTemporarilyExpanded = false
-            if strongSelf.session.sessionPreset != .high {
-                strongSelf.session.beginConfiguration()
-                strongSelf.session.sessionPreset = .high
-                strongSelf.session.commitConfiguration()
-                strongSelf.updatePhotoOutputDimensions()
-                strongSelf.applyCaptureSettings()
-            }
-        }
-    }
 
     /// Live Photo capture requires a microphone input on the capture session (see Apple’s
     /// “Capturing and saving Live Photos”). Enabling the pipeline without audio can cause
