@@ -151,6 +151,7 @@ struct CameraRootView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
+            .allowsHitTesting(false)
         }
         .animation(.snappy(duration: 0.28), value: controller.settings.aspectRatio)
         .ignoresSafeArea()
