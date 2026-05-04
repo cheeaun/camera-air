@@ -956,7 +956,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         capabilitiesRefreshWorkItem = nil
         let device = currentVideoInput?.device
         let minZoom = displayZoomFactor(for: device?.minAvailableVideoZoomFactor ?? 1.0, on: device)
-        let maxZoom = displayZoomFactor(for: device?.maxAvailableVideoZoomFactor ?? 1.0, on: device)
+        let maxZoom = cappedDisplayZoomFactor(for: device?.maxAvailableVideoZoomFactor ?? 1.0, on: device)
         let supportedZoomFactors = supportedPhysicalZoomFactors(for: device)
         let supportedZoomLevels = supportedZoomFactors.compactMap(Self.zoomLevel(for:))
 
@@ -1062,7 +1062,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         let hasUltraWide = constituentTypes.contains(.builtInUltraWideCamera)
         let hasTelephoto = constituentTypes.contains(.builtInTelephotoCamera)
         let minZoom = displayZoomFactor(for: device.minAvailableVideoZoomFactor, on: device)
-        let maxZoom = displayZoomFactor(for: device.maxAvailableVideoZoomFactor, on: device)
+        let maxZoom = cappedDisplayZoomFactor(for: device.maxAvailableVideoZoomFactor, on: device)
         let effectiveMaxZoom: CGFloat = {
             if !hasUltraWide && !hasTelephoto {
                 return max(maxZoom, 5.0)
@@ -1106,6 +1106,16 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private func displayZoomFactor(for deviceZoomFactor: CGFloat, on device: AVCaptureDevice?) -> CGFloat {
         guard let device else { return roundedZoomFactor(deviceZoomFactor) }
         return roundedZoomFactor(deviceZoomFactor * zoomDisplayMultiplier(for: device))
+    }
+
+    private func cappedDisplayZoomFactor(for deviceZoomFactor: CGFloat, on device: AVCaptureDevice?) -> CGFloat {
+        let displayFactor = displayZoomFactor(for: deviceZoomFactor, on: device)
+        guard displayFactor > 40 else { return displayFactor }
+        guard let device else { return displayFactor }
+        let multiplier = zoomDisplayMultiplier(for: device)
+        let adjusted = displayFactor / multiplier
+        let floored = floor(adjusted / 10) * 10
+        return max(floored, 10)
     }
 
     private func zoomDisplayMultiplier(for device: AVCaptureDevice) -> CGFloat {
