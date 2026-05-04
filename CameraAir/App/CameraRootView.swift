@@ -875,7 +875,7 @@ private struct ZoomFactorSlider: View {
         let logProgress = sqrt(progress)
         let logFactor = logLower + (logUpper - logLower) * logProgress
         let factor = exp(logFactor)
-        return abs(factor - 1.0) < 0.05 || index == 0 || index == total - 1
+        return presetFactors.contains { abs($0 - factor) < 0.05 }
     }
 
     private func dragGesture(in width: CGFloat) -> some Gesture {
