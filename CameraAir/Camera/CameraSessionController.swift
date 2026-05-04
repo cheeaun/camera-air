@@ -63,7 +63,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private var capabilitiesRefreshWorkItem: DispatchWorkItem?
     private let capabilitiesRefreshCooldown: TimeInterval = 0.25
 
-    private let displayZoomCeiling: CGFloat = 10.0
     private let livePhotoSupportOverride: Bool?
 
     override init() {
@@ -957,7 +956,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         capabilitiesRefreshWorkItem = nil
         let device = currentVideoInput?.device
         let minZoom = displayZoomFactor(for: device?.minAvailableVideoZoomFactor ?? 1.0, on: device)
-        let maxZoom = min(displayZoomFactor(for: device?.maxAvailableVideoZoomFactor ?? 1.0, on: device), displayZoomCeiling)
+        let maxZoom = displayZoomFactor(for: device?.maxAvailableVideoZoomFactor ?? 1.0, on: device)
         let supportedZoomFactors = supportedPhysicalZoomFactors(for: device)
         let supportedZoomLevels = supportedZoomFactors.compactMap(Self.zoomLevel(for:))
 
@@ -1063,10 +1062,16 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         let hasUltraWide = constituentTypes.contains(.builtInUltraWideCamera)
         let hasTelephoto = constituentTypes.contains(.builtInTelephotoCamera)
         let minZoom = displayZoomFactor(for: device.minAvailableVideoZoomFactor, on: device)
-        let maxZoom = min(displayZoomFactor(for: device.maxAvailableVideoZoomFactor, on: device), displayZoomCeiling)
+        let maxZoom = displayZoomFactor(for: device.maxAvailableVideoZoomFactor, on: device)
+        let effectiveMaxZoom: CGFloat = {
+            if !hasUltraWide && !hasTelephoto {
+                return max(maxZoom, 5.0)
+            }
+            return maxZoom
+        }()
 
         factors.insert(roundedZoomFactor(minZoom))
-        factors.insert(roundedZoomFactor(maxZoom))
+        factors.insert(roundedZoomFactor(effectiveMaxZoom))
         factors.insert(1.0)
 
         if hasUltraWide {
@@ -1081,7 +1086,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
 
         if maxZoom > 1.0 {
-            factors.insert(roundedZoomFactor(maxZoom))
+            factors.insert(roundedZoomFactor(effectiveMaxZoom))
         }
 
         let sortedFactors = factors.sorted()

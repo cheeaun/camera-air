@@ -641,8 +641,30 @@ private struct ZoomFactorSlider: View {
     @State private var dragX: CGFloat = 0
     @State private var dragHapticTick: Int = 0
 
-    private let presetFactors: [CGFloat] = [0.5, 1.0, 10.0]
-    private let tickCount = 40
+    private var presetFactors: [CGFloat] {
+        guard !supportedFactors.isEmpty else { return [1.0] }
+        let min = supportedFactors.first!
+        let max = supportedFactors.last!
+        var picks: [CGFloat] = [min]
+        if min < 1.0 && max > 1.0 {
+            picks.append(1.0)
+        }
+        if max != picks.last {
+            picks.append(max)
+        }
+        var result: [CGFloat] = []
+        for factor in picks {
+            if result.isEmpty || abs(factor - result.last!) > 0.05 {
+                result.append(factor)
+            }
+        }
+        return result
+    }
+    private var tickCount: Int {
+        let logSpan = log(range.upperBound / range.lowerBound)
+        if logSpan <= 0 { return 20 }
+        return Int((logSpan * 12).rounded(.up))
+    }
     private let horizontalContentInset: CGFloat = 18
     
 
@@ -739,7 +761,7 @@ private struct ZoomFactorSlider: View {
                             onEditingChanged(false)
                         }
                     } label: {
-                        Text(factor == 10 ? "10" : (factor == 1 ? "1" : "0.5"))
+                        Text(factor.cameraZoomLabel)
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
                             .foregroundStyle(isActive ? .black : .white)
                             .frame(width: 28, height: 28)
@@ -759,8 +781,8 @@ private struct ZoomFactorSlider: View {
     }
 
     private var formattedZoomLabel: String {
-        if value >= 10 {
-            return "10x"
+        if value >= range.upperBound {
+            return range.upperBound.cameraZoomLabel
         }
         if value >= 1 {
             return String(format: "%.1fx", value)
@@ -769,7 +791,9 @@ private struct ZoomFactorSlider: View {
     }
 
     private var range: ClosedRange<CGFloat> {
-        0.5...10.0
+        let lower = supportedFactors.first ?? 1.0
+        let upper = supportedFactors.last ?? lower
+        return lower...max(upper, lower)
     }
 
     private func isPresetZoom(_ zoom: CGFloat) -> Bool {
