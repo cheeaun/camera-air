@@ -432,12 +432,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 return
             }
 
-            let wasAlreadyLocked = self.settings.isExposureLocked
             self.publish {
-                if !wasAlreadyLocked {
-                    self.settings.isExposureLocked = true
-                    self.showTransientToast("Exposure locked")
-                }
+                self.settings.isExposureLocked = true
+                self.showTransientToast("Exposure locked")
             }
         }
     }
