@@ -714,14 +714,22 @@ private struct ZoomFactorSlider: View {
                     }
                 }()
 
+                // Dense minor ticks
                 ForEach(0..<tickCount, id: \.self) { index in
                     let x = positions[index]
-                    let isMajor = isTickMajor(index: index, total: tickCount)
-
                     Rectangle()
-                        .fill(.white.opacity(isMajor ? 0.5 : 0.25))
-                        .frame(width: 1, height: isMajor ? 6 : 4)
-                        .position(x: x, y: trackY - (isMajor ? 3 : 2))
+                        .fill(.white.opacity(0.25))
+                        .frame(width: 1, height: 4)
+                        .position(x: x, y: trackY - 2)
+                }
+
+                // Prominent ticks at preset label positions (0.5, 1, 2, 5, ...), taller and higher so they render above the labels
+                ForEach(presetFactors, id: \.self) { factor in
+                    let x = labelX(for: factor, in: width)
+                    Rectangle()
+                        .fill(.white.opacity(0.6))
+                        .frame(width: 2, height: 12)
+                        .position(x: x, y: trackY - 6)
                 }
 
                 if isDragging || !isPresetZoom(value) {
@@ -866,16 +874,6 @@ private struct ZoomFactorSlider: View {
         let logValue = logLower + (logUpper - logLower) * logProgress
         let normalizedLogProgress = (logValue - logLower) / (logUpper - logLower)
         return normalizedLogProgress * width
-    }
-
-    private func isTickMajor(index: Int, total: Int) -> Bool {
-        let logLower = log(range.lowerBound)
-        let logUpper = log(range.upperBound)
-        let progress = CGFloat(index) / CGFloat(total - 1)
-        let logProgress = sqrt(progress)
-        let logFactor = logLower + (logUpper - logLower) * logProgress
-        let factor = exp(logFactor)
-        return presetFactors.contains { abs($0 - factor) < 0.05 }
     }
 
     private func dragGesture(in width: CGFloat) -> some Gesture {
