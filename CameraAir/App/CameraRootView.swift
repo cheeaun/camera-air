@@ -643,22 +643,29 @@ private struct ZoomFactorSlider: View {
 
     private var presetFactors: [CGFloat] {
         guard !supportedFactors.isEmpty else { return [1.0] }
-        let min = supportedFactors.first!
-        let max = supportedFactors.last!
-        var picks: [CGFloat] = [min]
-        if min < 1.0 && max > 1.0 {
-            picks.append(1.0)
+        let minF = supportedFactors.first!
+        let maxF = supportedFactors.last!
+        var picks: Set<CGFloat> = [minF, maxF]
+        if minF < 1.0 && maxF > 1.0 {
+            picks.insert(1.0)
         }
-        var step: CGFloat = 10
-        while step < max {
-            picks.append(step)
+        if maxF >= 2.0 {
+            picks.insert(2.0)
+        }
+        if maxF >= 5.0 {
+            picks.insert(5.0)
+        }
+        if maxF >= 10.0 {
+            picks.insert(10.0)
+        }
+        var step: CGFloat = 20
+        while step <= maxF {
+            picks.insert(step)
             step += 10
         }
-        if max != picks.last {
-            picks.append(max)
-        }
+        let filtered = picks.filter { $0 >= minF && $0 <= maxF }.sorted()
         var result: [CGFloat] = []
-        for factor in picks {
+        for factor in filtered {
             if result.isEmpty || abs(factor - result.last!) > 0.05 {
                 result.append(factor)
             }
@@ -790,9 +797,9 @@ private struct ZoomFactorSlider: View {
             return range.upperBound.cameraZoomLabel
         }
         if value >= 1 {
-            return String(format: "%.1fx", value)
+            return String(format: "%.1f", value)
         }
-        return String(format: "%.2fx", value)
+        return String(format: "%.2f", value)
     }
 
     private var range: ClosedRange<CGFloat> {

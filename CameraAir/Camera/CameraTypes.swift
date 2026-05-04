@@ -474,10 +474,10 @@ extension CGFloat {
     var cameraZoomLabel: String {
         let roundedValue = (Double(self) * 10).rounded() / 10
         if abs(roundedValue.rounded() - roundedValue) < 0.05 {
-            return String(format: "%.0fx", roundedValue)
+            return String(format: "%.0f", roundedValue)
         }
 
-        return String(format: "%.1fx", roundedValue)
+        return String(format: "%.1f", roundedValue)
     }
 }
 
