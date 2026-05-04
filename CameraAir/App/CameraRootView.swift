@@ -649,6 +649,11 @@ private struct ZoomFactorSlider: View {
         if min < 1.0 && max > 1.0 {
             picks.append(1.0)
         }
+        var step: CGFloat = 10
+        while step < max {
+            picks.append(step)
+            step += 10
+        }
         if max != picks.last {
             picks.append(max)
         }

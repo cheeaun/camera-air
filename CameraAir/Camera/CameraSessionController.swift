@@ -1113,9 +1113,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         guard displayFactor > 40 else { return displayFactor }
         guard let device else { return displayFactor }
         let multiplier = zoomDisplayMultiplier(for: device)
-        let adjusted = displayFactor / multiplier
+        let adjusted = deviceZoomFactor / multiplier
         let floored = floor(adjusted / 10) * 10
-        return max(floored, 10)
+        return min(max(floored, 10), 20)
     }
 
     private func zoomDisplayMultiplier(for device: AVCaptureDevice) -> CGFloat {
