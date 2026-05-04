@@ -53,6 +53,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private var currentAudioInput: AVCaptureDeviceInput?
     private var photoCaptureProcessor: PhotoCaptureProcessor?
     private var recordingAspectRatio: AspectRatioOption?
+    private var activeFormatObservation: NSKeyValueObservation?
+    private var maxAvailableZoomObservation: NSKeyValueObservation?
     private var isConfigured = false
     private var hasPrepared = false
     private var pendingRoute: CameraRoute?
@@ -79,6 +81,11 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         loadRememberLastSettings()
         loadSettings()
         loadLastCapturedAsset()
+    }
+
+    deinit {
+        activeFormatObservation?.invalidate()
+        maxAvailableZoomObservation?.invalidate()
     }
 
     var isRunningUITests: Bool {
@@ -352,6 +359,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 strongSelf.session.addInput(previousInput)
                 strongSelf.currentVideoInput = previousInput
             }
+            strongSelf.observeZoomCapabilities(for: strongSelf.currentVideoInput?.device)
             strongSelf.session.commitConfiguration()
 
             strongSelf.refreshCapabilities()
@@ -637,6 +645,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                strongSelf.session.canAddInput(videoInput) {
                 strongSelf.session.addInput(videoInput)
                 strongSelf.currentVideoInput = videoInput
+                strongSelf.observeZoomCapabilities(for: videoDevice)
             }
 
             if includeAudio {
@@ -955,8 +964,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         lastCapabilitiesRefreshDate = now
         capabilitiesRefreshWorkItem = nil
         let device = currentVideoInput?.device
-        let minZoom = displayZoomFactor(for: device?.minAvailableVideoZoomFactor ?? 1.0, on: device)
-        let maxZoom = cappedDisplayZoomFactor(for: device?.maxAvailableVideoZoomFactor ?? 1.0, on: device)
+        let displayZoomLimits = displayZoomLimits(for: device)
+        let minZoom = displayZoomLimits.lowerBound
+        let maxZoom = displayZoomLimits.upperBound
         let supportedZoomFactors = supportedPhysicalZoomFactors(for: device)
         let supportedZoomLevels = supportedZoomFactors.compactMap(Self.zoomLevel(for:))
 
@@ -1061,17 +1071,12 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         let constituentTypes = Set(device.constituentDevices.map(\.deviceType))
         let hasUltraWide = constituentTypes.contains(.builtInUltraWideCamera)
         let hasTelephoto = constituentTypes.contains(.builtInTelephotoCamera)
-        let minZoom = displayZoomFactor(for: device.minAvailableVideoZoomFactor, on: device)
-        let maxZoom = cappedDisplayZoomFactor(for: device.maxAvailableVideoZoomFactor, on: device)
-        let effectiveMaxZoom: CGFloat = {
-            if !hasUltraWide && !hasTelephoto {
-                return max(maxZoom, 5.0)
-            }
-            return maxZoom
-        }()
+        let displayZoomLimits = displayZoomLimits(for: device)
+        let minZoom = displayZoomLimits.lowerBound
+        let maxZoom = displayZoomLimits.upperBound
 
         factors.insert(roundedZoomFactor(minZoom))
-        factors.insert(roundedZoomFactor(effectiveMaxZoom))
+        factors.insert(roundedZoomFactor(maxZoom))
         factors.insert(1.0)
 
         if hasUltraWide {
@@ -1079,14 +1084,14 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         }
 
         for switchOverFactor in device.virtualDeviceSwitchOverVideoZoomFactors where hasTelephoto {
-            let displayFactor = roundedZoomFactor(CGFloat(truncating: switchOverFactor) * multiplier)
+            let displayFactor = displayZoomFactor(for: CGFloat(truncating: switchOverFactor), on: device)
             if displayFactor > minZoom && displayFactor < maxZoom {
                 factors.insert(displayFactor)
             }
         }
 
         if maxZoom > 1.0 {
-            factors.insert(roundedZoomFactor(effectiveMaxZoom))
+            factors.insert(roundedZoomFactor(maxZoom))
         }
 
         let sortedFactors = factors.sorted()
@@ -1098,9 +1103,34 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         return min(max(factor, range.lowerBound), range.upperBound)
     }
 
+    private func observeZoomCapabilities(for device: AVCaptureDevice?) {
+        activeFormatObservation?.invalidate()
+        maxAvailableZoomObservation?.invalidate()
+        activeFormatObservation = nil
+        maxAvailableZoomObservation = nil
+
+        guard let device else { return }
+
+        activeFormatObservation = device.observe(\.activeFormat, options: [.new]) { [weak self] _, _ in
+            self?.sessionQueue.async { [weak self] in
+                self?.refreshCapabilities()
+                self?.applyZoomSettings(animated: false)
+            }
+        }
+
+        maxAvailableZoomObservation = device.observe(\.maxAvailableVideoZoomFactor, options: [.new]) { [weak self] _, _ in
+            self?.sessionQueue.async { [weak self] in
+                guard let self else { return }
+                self.refreshCapabilities()
+                self.applyZoomSettings(animated: false)
+            }
+        }
+    }
+
     private func clampedDeviceZoomFactor(for displayFactor: CGFloat, device: AVCaptureDevice) -> CGFloat {
         let rawZoomFactor = displayFactor / zoomDisplayMultiplier(for: device)
-        return min(max(rawZoomFactor, device.minAvailableVideoZoomFactor), device.maxAvailableVideoZoomFactor)
+        let limits = rawZoomLimits(for: device)
+        return min(max(rawZoomFactor, limits.lowerBound), limits.upperBound)
     }
 
     private func displayZoomFactor(for deviceZoomFactor: CGFloat, on device: AVCaptureDevice?) -> CGFloat {
@@ -1108,14 +1138,23 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         return roundedZoomFactor(deviceZoomFactor * zoomDisplayMultiplier(for: device))
     }
 
-    private func cappedDisplayZoomFactor(for deviceZoomFactor: CGFloat, on device: AVCaptureDevice?) -> CGFloat {
-        let displayFactor = displayZoomFactor(for: deviceZoomFactor, on: device)
-        guard displayFactor > 40 else { return displayFactor }
-        guard let device else { return displayFactor }
-        let multiplier = zoomDisplayMultiplier(for: device)
-        let adjusted = deviceZoomFactor / multiplier
-        let floored = floor(adjusted / 10) * 10
-        return min(max(floored, 10), 20)
+    private func rawZoomLimits(for device: AVCaptureDevice) -> ClosedRange<CGFloat> {
+        let minZoom = device.minAvailableVideoZoomFactor
+        let losslessMax = device.activeFormat.videoZoomFactorUpscaleThreshold
+        let hardwareMax = device.maxAvailableVideoZoomFactor
+        let lastOptical = device.virtualDeviceSwitchOverVideoZoomFactors
+            .last
+            .map { CGFloat(truncating: $0) } ?? 1.0
+        let softMax = min(lastOptical * 2.0, losslessMax, hardwareMax)
+        return minZoom...max(softMax, minZoom)
+    }
+
+    private func displayZoomLimits(for device: AVCaptureDevice?) -> ClosedRange<CGFloat> {
+        guard let device else { return 1.0...1.0 }
+        let rawLimits = rawZoomLimits(for: device)
+        let lower = displayZoomFactor(for: rawLimits.lowerBound, on: device)
+        let upper = displayZoomFactor(for: rawLimits.upperBound, on: device)
+        return lower...max(upper, lower)
     }
 
     private func zoomDisplayMultiplier(for device: AVCaptureDevice) -> CGFloat {
