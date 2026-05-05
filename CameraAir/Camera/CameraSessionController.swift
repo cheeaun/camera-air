@@ -1280,7 +1280,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         if let livePhotoSupportOverride {
             return livePhotoSupportOverride
         }
-        return outputSupportsLivePhoto && hasAudioInput
+        return outputSupportsLivePhoto
     }
 
     private static func requestAccess(for mediaType: AVMediaType) async -> Bool {
