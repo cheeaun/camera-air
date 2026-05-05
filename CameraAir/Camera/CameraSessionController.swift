@@ -858,6 +858,10 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             }
 
             Self.applyLowLightBoost(to: device, enabled: settings.nightMode != .off)
+
+            if device.isGeometricDistortionCorrectionSupported {
+                device.isGeometricDistortionCorrectionEnabled = true
+            }
         } catch {
             showTransientError("Unable to update camera settings.")
         }
@@ -966,6 +970,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             ),
             supportsLowLightBoost: Self.deviceSupportsLowLightBoost(device),
             supportsExposureLock: device?.isExposureModeSupported(.locked) ?? false,
+            supportsGeometricDistortionCorrection: Self.deviceSupportsGeometricDistortionCorrection(device),
             supportedZoomLevels: supportedZoomLevels,
             supportedZoomFactors: supportedZoomFactors,
             maxZoomFactor: maxZoom,
@@ -1018,6 +1023,10 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     /// must be re-queried after the session has started running.
     private static func deviceOrFormatsSupportLowLightBoost(_ device: AVCaptureDevice) -> Bool {
         device.isLowLightBoostSupported
+    }
+
+    private static func deviceSupportsGeometricDistortionCorrection(_ device: AVCaptureDevice?) -> Bool {
+        device?.isGeometricDistortionCorrectionSupported ?? false
     }
 
     private func discoverDevice(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {

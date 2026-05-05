@@ -458,6 +458,7 @@ struct CameraCapabilities: Equatable {
     var supportsLivePhoto = false
     var supportsLowLightBoost = false
     var supportsExposureLock = false
+    var supportsGeometricDistortionCorrection = false
     var supportedZoomLevels: [ZoomLevel] = [.standard]
     var supportedZoomFactors: [CGFloat] = [1.0]
     var maxZoomFactor: CGFloat = 1.0
