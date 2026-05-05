@@ -506,7 +506,7 @@ private struct AspectRatioControls: View {
     let onOrientationTap: () -> Void
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 0) {
             let ratioButton = Button(action: onRatioTap) {
                 Text(ratioText)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
