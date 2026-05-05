@@ -303,8 +303,8 @@ enum ZoomLevel: String, CaseIterable, Identifiable, Codable {
 }
 
 struct CameraSettings: Equatable, Codable {
-    var flash: FlashPreference = .auto
-    var isLivePhotoEnabled = true
+    var flash: FlashPreference = .off
+    var isLivePhotoEnabled = false
     var isExposureLocked = false
     var aspectRatio: AspectRatioOption = .portrait34
     var aspectOrientation: AspectOrientation = .portrait
@@ -313,8 +313,8 @@ struct CameraSettings: Equatable, Codable {
     var customZoomFactor: CGFloat = 1.0
 
     init(
-        flash: FlashPreference = .auto,
-        isLivePhotoEnabled: Bool = true,
+        flash: FlashPreference = .off,
+        isLivePhotoEnabled: Bool = false,
         isExposureLocked: Bool = false,
         aspectRatio: AspectRatioOption = .portrait34,
         aspectOrientation: AspectOrientation = .portrait,
@@ -392,7 +392,7 @@ enum RememberedCameraSetting: String, CaseIterable, Identifiable, Codable {
     var defaultValueDescription: String {
         switch self {
         case .flash:
-            return "Auto"
+            return "Off"
         case .aspectRatio:
             return "3:4"
         case .orientation:
@@ -402,7 +402,7 @@ enum RememberedCameraSetting: String, CaseIterable, Identifiable, Codable {
         case .nightMode:
             return "Auto"
         case .livePhoto:
-            return "On"
+            return "Off"
         case .zoom:
             return "1x"
         case .mode:
@@ -437,7 +437,7 @@ enum RememberedCameraSetting: String, CaseIterable, Identifiable, Codable {
 }
 
 struct CameraRememberLastSettings: Equatable, Codable {
-    var isEnabled = true
+    var isEnabled = false
     var enabledSettings: Set<RememberedCameraSetting> = []
 
     func remembers(_ setting: RememberedCameraSetting) -> Bool {
