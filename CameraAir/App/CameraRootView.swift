@@ -386,9 +386,9 @@ struct CameraRootView: View {
                 }
             }
             .frame(width: 58, height: 58)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .clipShape(Circle())
             .overlay {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                Circle()
                     .strokeBorder(.white.opacity(0.16), lineWidth: 1)
             }
             .modifier(ThumbnailGlassModifier())
@@ -411,14 +411,14 @@ struct CameraRootView: View {
             VStack(spacing: 6) {
                 Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
                     .font(.system(size: 21, weight: .semibold))
-                Text(controller.lens.title)
+                Text(controller.lens.title.uppercased())
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(.white.opacity(0.62))
             .frame(width: 58, height: 58)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .clipShape(Circle())
             .overlay {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                Circle()
                     .strokeBorder(.white.opacity(0.16), lineWidth: 1)
             }
             .modifier(ThumbnailGlassModifier())
@@ -1219,7 +1219,7 @@ private enum GlassProminence {
 private struct ThumbnailGlassModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .glassEffect(.regular.tint(Color.white.opacity(0.04)).interactive(), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .glassEffect(.regular.tint(Color.white.opacity(0.04)).interactive(), in: Circle())
     }
 }
 
