@@ -385,7 +385,7 @@ struct CameraRootView: View {
                     }
                 }
             }
-            .frame(width: 58, height: 58)
+            .frame(width: 46, height: 46)
             .clipShape(Circle())
             .overlay {
                 Circle()
@@ -408,14 +408,14 @@ struct CameraRootView: View {
             triggerInterfaceHaptic()
             controller.switchLens()
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 3) {
                 Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                 Text(controller.lens.title.uppercased())
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .font(.system(size: 8, weight: .semibold, design: .rounded))
             }
             .foregroundStyle(.white.opacity(0.62))
-            .frame(width: 58, height: 58)
+            .frame(width: 46, height: 46)
             .clipShape(Circle())
             .overlay {
                 Circle()
