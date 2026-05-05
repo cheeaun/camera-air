@@ -179,82 +179,94 @@ struct CameraRootView: View {
 
     private var topBar: some View {
         HStack(spacing: 6) {
-            FlashMenu(
-                selection: controller.settings.flash,
-                isEnabled: controller.capabilities.hasFlash,
-                onSelect: { flash in
-                    triggerInterfaceHaptic()
-                    controller.setFlash(flash)
-                }
-            )
-
-            AspectRatioControls(
-                ratioText: controller.settings.aspectRatio.title(for: controller.settings.aspectOrientation),
-                isRatioEnabled: !controller.settings.aspectOrientation.isSquare,
-                orientation: controller.settings.aspectOrientation,
-                onRatioTap: {
-                    controller.cycleAspectRatio()
-                    triggerInterfaceHaptic()
-                },
-                onOrientationTap: {
-                    controller.cycleAspectOrientation()
-                    triggerInterfaceHaptic()
-                }
-            )
-
-            ToggleChip(
-                accessibilityLabel: controller.settings.isExposureLocked ? "Exposure locked" : "Exposure",
-                icon: "sun.max.fill",
-                iconView: { isOn in
-                    AnyView(ExposureLockIcon(isLocked: isOn))
-                },
-                isOn: controller.settings.isExposureLocked,
-                isEnabled: controller.capabilities.supportsExposureLock
-            ) {
-                triggerInterfaceHaptic()
-                controller.toggleExposureLock()
-            }
-
-            if controller.mode == .photo {
-                Menu {
-                    ForEach(NightModePreference.allCases) { option in
-                        Button {
-                            CameraHaptics.interface()
-                            controller.setNightMode(option)
-                        } label: {
-                            if option == controller.settings.nightMode {
-                                Label(option.title, systemImage: "checkmark")
-                            } else {
-                                Text(option.title)
-                            }
-                        }
+            ToolbarSegment {
+                FlashMenu(
+                    selection: controller.settings.flash,
+                    isEnabled: controller.capabilities.hasFlash,
+                    applyGlassCapsule: false,
+                    onSelect: { flash in
+                        triggerInterfaceHaptic()
+                        controller.setFlash(flash)
                     }
-                } label: {
-                    NightModeIcon(mode: controller.settings.nightMode)
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 38)
-                    .contentShape(Capsule())
-                    .glassCapsule(interactive: true, isActive: controller.settings.nightMode != .off)
-                    .compositingGroup()
-                    .accessibilityLabel(Text(controller.settings.nightMode == .off ? "Night mode off" : "Night mode"))
-                } primaryAction: {
-                    triggerInterfaceHaptic()
-                    controller.cycleNightMode()
-                }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
+                )
+
+                toolbarDivider
 
                 ToggleChip(
-                    accessibilityLabel: "Live photo",
-                    icon: controller.settings.isLivePhotoEnabled ? "livephoto" : "livephoto.slash",
-                    isOn: controller.settings.isLivePhotoEnabled,
-                    isEnabled: controller.capabilities.supportsLivePhoto
+                    accessibilityLabel: controller.settings.isExposureLocked ? "Exposure locked" : "Exposure",
+                    icon: "sun.max.fill",
+                    iconView: { isOn in
+                        AnyView(ExposureLockIcon(isLocked: isOn))
+                    },
+                    isOn: controller.settings.isExposureLocked,
+                    isEnabled: controller.capabilities.supportsExposureLock,
+                    applyGlassCapsule: false
                 ) {
-                    if controller.capabilities.supportsLivePhoto {
+                    triggerInterfaceHaptic()
+                    controller.toggleExposureLock()
+                }
+
+                if controller.mode == .photo {
+                    toolbarDivider
+
+                    Menu {
+                        ForEach(NightModePreference.allCases) { option in
+                            Button {
+                                CameraHaptics.interface()
+                                controller.setNightMode(option)
+                            } label: {
+                                if option == controller.settings.nightMode {
+                                    Label(option.title, systemImage: "checkmark")
+                                } else {
+                                    Text(option.title)
+                                }
+                            }
+                        }
+                    } label: {
+                        NightModeIcon(mode: controller.settings.nightMode)
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 38)
+                        .contentShape(Capsule())
+                        .accessibilityLabel(Text(controller.settings.nightMode == .off ? "Night mode off" : "Night mode"))
+                    } primaryAction: {
                         triggerInterfaceHaptic()
-                        controller.toggleLivePhoto()
+                        controller.cycleNightMode()
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
+
+                    toolbarDivider
+
+                    ToggleChip(
+                        accessibilityLabel: "Live photo",
+                        icon: controller.settings.isLivePhotoEnabled ? "livephoto" : "livephoto.slash",
+                        isOn: controller.settings.isLivePhotoEnabled,
+                        isEnabled: controller.capabilities.supportsLivePhoto,
+                        applyGlassCapsule: false
+                    ) {
+                        if controller.capabilities.supportsLivePhoto {
+                            triggerInterfaceHaptic()
+                            controller.toggleLivePhoto()
+                        }
                     }
                 }
+            }
+
+            ToolbarSegment {
+                AspectRatioControls(
+                    ratioText: controller.settings.aspectRatio.title(for: controller.settings.aspectOrientation),
+                    isRatioEnabled: !controller.settings.aspectOrientation.isSquare,
+                    orientation: controller.settings.aspectOrientation,
+                    applyGlassCapsule: false,
+                    onRatioTap: {
+                        controller.cycleAspectRatio()
+                        triggerInterfaceHaptic()
+                    },
+                    onOrientationTap: {
+                        controller.cycleAspectOrientation()
+                        triggerInterfaceHaptic()
+                    }
+                )
             }
 
             Spacer(minLength: 0)
@@ -270,6 +282,12 @@ struct CameraRootView: View {
             }
         }
         .padding(.horizontal, 18)
+    }
+
+    private var toolbarDivider: some View {
+        Rectangle()
+            .fill(.white.opacity(0.1))
+            .frame(width: 1, height: 20)
     }
 
     private var settingsSheet: some View {
@@ -483,12 +501,13 @@ private struct AspectRatioControls: View {
     let ratioText: String
     let isRatioEnabled: Bool
     let orientation: AspectOrientation
+    var applyGlassCapsule: Bool = true
     let onRatioTap: () -> Void
     let onOrientationTap: () -> Void
 
     var body: some View {
         HStack(spacing: 4) {
-            Button(action: onRatioTap) {
+            let ratioButton = Button(action: onRatioTap) {
                 Text(ratioText)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(isRatioEnabled ? 0.86 : 0.4))
@@ -498,17 +517,27 @@ private struct AspectRatioControls: View {
             .buttonStyle(.plain)
             .disabled(!isRatioEnabled)
             .contentShape(Capsule())
-            .glassCapsule(interactive: true, isActive: false)
 
-            Button(action: onOrientationTap) {
+            if applyGlassCapsule {
+                ratioButton.glassCapsule(interactive: true, isActive: false)
+            } else {
+                ratioButton
+            }
+
+            let orientationButton = Button(action: onOrientationTap) {
                 AspectOrientationIcon(orientation: orientation)
                     .frame(width: 44, height: 38)
             }
             .buttonStyle(.plain)
             .contentShape(Capsule())
-            .glassCapsule(interactive: true, isActive: true)
             .accessibilityLabel(Text("Aspect orientation \(orientation.rawValue)"))
             .animation(.snappy(duration: 0.25), value: orientation)
+
+            if applyGlassCapsule {
+                orientationButton.glassCapsule(interactive: true, isActive: true)
+            } else {
+                orientationButton
+            }
         }
     }
 }
@@ -937,13 +966,25 @@ private struct Triangle: Shape {
     }
 }
 
+private struct ToolbarSegment<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        HStack(spacing: 0) {
+            content
+        }
+        .glassCapsule(interactive: true, isActive: false)
+    }
+}
+
 private struct FlashMenu: View {
     let selection: FlashPreference
     let isEnabled: Bool
+    var applyGlassCapsule: Bool = true
     let onSelect: (FlashPreference) -> Void
 
     var body: some View {
-        Menu {
+        let menu = Menu {
             ForEach(FlashPreference.allCases) { option in
                 Button {
                     CameraHaptics.interface()
@@ -963,8 +1004,14 @@ private struct FlashMenu: View {
                 .frame(width: 44, height: 38)
         }
         .disabled(!isEnabled)
-        .glassCapsule(interactive: true)
         .accessibilityLabel(Text("Flash \(selection.title)"))
+
+        if applyGlassCapsule {
+            menu.glassCapsule(interactive: true)
+        } else {
+            menu
+                .contentShape(Capsule())
+        }
     }
 }
 
@@ -1004,6 +1051,7 @@ private struct ToggleChip: View {
     var iconView: ((Bool) -> AnyView)?
     let isOn: Bool
     let isEnabled: Bool
+    var applyGlassCapsule: Bool = true
     let action: () -> Void
 
     @ViewBuilder
@@ -1017,16 +1065,22 @@ private struct ToggleChip: View {
     }
 
     var body: some View {
-        Button(action: action) {
+        let button = Button(action: action) {
             iconContent
             .foregroundStyle(isEnabled ? .white : .white.opacity(0.46))
             .frame(width: 44, height: 38)
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
-        .glassCapsule(interactive: true, isActive: isOn)
         .accessibilityLabel(Text(accessibilityLabel))
         .accessibilityValue(Text(isOn ? "On" : "Off"))
+
+        if applyGlassCapsule {
+            button.glassCapsule(interactive: true, isActive: isOn)
+        } else {
+            button
+                .contentShape(Capsule())
+        }
     }
 }
 
