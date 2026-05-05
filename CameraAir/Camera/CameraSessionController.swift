@@ -47,8 +47,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     private var recordingStartTime: Date?
     private var recordingTimer: Timer?
     
-    // Remember a user's Live Photo preference so we can restore it after night mode changes
-    private var previousLivePhotoEnabled: Bool?
     private var currentVideoInput: AVCaptureDeviceInput?
     private var currentAudioInput: AVCaptureDeviceInput?
     private var photoCaptureProcessor: PhotoCaptureProcessor?
@@ -388,7 +386,13 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         triggerSelectionFeedback()
         showTransientToast(isEnabled ? "Live Photo on" : "Live Photo off")
         sessionQueue.async { [weak self] in
-            self?.applyCaptureSettings()
+            guard let self else { return }
+            if isEnabled {
+                self.ensureAudioInput()
+            } else if self.mode == .photo {
+                self.removeAudioInput()
+            }
+            self.applyCaptureSettings()
         }
     }
 
@@ -638,6 +642,12 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
             if includeAudio {
                 strongSelf.configureAudioSessionForHapticsDuringRecording()
+                if let audioDevice = AVCaptureDevice.default(for: .audio),
+                   let audioInput = try? AVCaptureDeviceInput(device: audioDevice),
+                   strongSelf.session.canAddInput(audioInput) {
+                    strongSelf.session.addInput(audioInput)
+                    strongSelf.currentAudioInput = audioInput
+                }
             }
 
             if strongSelf.session.canAddOutput(strongSelf.photoOutput) {
@@ -837,6 +847,9 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
     }
 
     private func applyCaptureSettings() {
+        if settings.isLivePhotoEnabled {
+            ensureAudioInput()
+        }
         // Live Photos include sound; Apple requires a microphone input on the session.
         photoOutput.isLivePhotoCaptureEnabled = Self.shouldEnableLivePhotoCapture(
             outputSupportsLivePhoto: photoOutput.isLivePhotoCaptureSupported,
