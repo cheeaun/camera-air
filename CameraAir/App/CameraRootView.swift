@@ -408,11 +408,11 @@ struct CameraRootView: View {
             triggerInterfaceHaptic()
             controller.switchLens()
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                    .font(.system(size: 21, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                 Text(controller.lens.title.uppercased())
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
             }
             .foregroundStyle(.white.opacity(0.62))
             .frame(width: 58, height: 58)
