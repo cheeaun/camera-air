@@ -358,6 +358,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 strongSelf.settings.zoomLevel = .standard
                 strongSelf.settings.customZoomFactor = strongSelf.clampedDisplayZoomFactor(1.0)
                 strongSelf.settings.exposureBias = 0.0
+                strongSelf.settings.isExposureLocked = false
             }
             strongSelf.applyCaptureSettings()
             strongSelf.saveSettings(for: .zoom)
@@ -395,6 +396,21 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             }
             self.applyCaptureSettings()
         }
+    }
+
+    func lockExposure() {
+        guard !settings.isExposureLocked else { return }
+        publish {
+            self.settings.isExposureLocked = true
+        }
+        saveSettings(for: .exposure)
+        sessionQueue.async { [weak self] in
+            self?.applyCaptureSettings()
+        }
+    }
+
+    func finalizeExposureBias() {
+        showTransientToast("Exposure locked")
     }
 
     func toggleExposureLock() {
@@ -455,6 +471,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
                 if device.isExposurePointOfInterestSupported {
                     device.exposurePointOfInterest = devicePoint
                     device.exposureMode = .autoExpose
+                    device.setExposureTargetBias(0, completionHandler: nil)
                 }
 
                 device.unlockForConfiguration()
@@ -465,6 +482,7 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
             self.publish {
                 self.settings.isExposureLocked = true
+                self.settings.exposureBias = 0.0
                 self.showTransientToast("Exposure locked")
             }
         }

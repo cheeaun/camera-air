@@ -5,6 +5,7 @@ import UIKit
 struct CameraPreviewView: UIViewRepresentable {
     let session: AVCaptureSession
     var onTapDevicePoint: ((CGPoint) -> Void)?
+    var onExposureBiasDragStarted: (() -> Void)?
     var onExposureBiasChanged: ((Float) -> Void)?
     var onExposureBiasDragEnded: ((Float) -> Void)?
     var currentExposureBias: Float = 0.0
@@ -13,6 +14,7 @@ struct CameraPreviewView: UIViewRepresentable {
         let view = PreviewContainerView()
         view.previewLayer.session = session
         view.onTapDevicePoint = onTapDevicePoint
+        view.onExposureBiasDragStarted = onExposureBiasDragStarted
         view.onExposureBiasChanged = onExposureBiasChanged
         view.onExposureBiasDragEnded = onExposureBiasDragEnded
         view.currentExposureBias = currentExposureBias
@@ -22,6 +24,7 @@ struct CameraPreviewView: UIViewRepresentable {
     func updateUIView(_ uiView: PreviewContainerView, context: Context) {
         uiView.previewLayer.session = session
         uiView.onTapDevicePoint = onTapDevicePoint
+        uiView.onExposureBiasDragStarted = onExposureBiasDragStarted
         uiView.onExposureBiasChanged = onExposureBiasChanged
         uiView.onExposureBiasDragEnded = onExposureBiasDragEnded
         uiView.currentExposureBias = currentExposureBias
@@ -38,6 +41,7 @@ final class PreviewContainerView: UIView {
     }
 
     var onTapDevicePoint: ((CGPoint) -> Void)?
+    var onExposureBiasDragStarted: (() -> Void)?
     var onExposureBiasChanged: ((Float) -> Void)?
     var onExposureBiasDragEnded: ((Float) -> Void)?
     var currentExposureBias: Float = 0.0
@@ -49,6 +53,7 @@ final class PreviewContainerView: UIView {
 
     private var biasDragStartY: CGFloat = 0
     private var biasAtDragStart: Float = 0
+    private var biasDragLocked: Bool = false
     private let pointsPerStop: CGFloat = 150.0
     private let rightColumnFraction: CGFloat = 2.0 / 3.0
     private let topButtonZone: CGFloat = 60
@@ -91,7 +96,7 @@ final class PreviewContainerView: UIView {
     }
 
     private func setupExposureBiasCircleLayer() {
-        let size: CGFloat = 28
+        let size: CGFloat = 56
         let circleLayer = CAShapeLayer()
         circleLayer.path = UIBezierPath(ovalIn: CGRect(x: -size / 2, y: -size / 2, width: size, height: size)).cgPath
         circleLayer.fillColor = UIColor.yellow.cgColor
@@ -218,6 +223,7 @@ final class PreviewContainerView: UIView {
             }
             biasDragStartY = location.y
             biasAtDragStart = currentExposureBias
+            biasDragLocked = false
             showBiasIndicator(at: location)
             CameraHaptics.light()
 
@@ -225,6 +231,10 @@ final class PreviewContainerView: UIView {
             let deltaY = biasDragStartY - location.y
             let deltaEV = Float(deltaY / pointsPerStop)
             let newBias = biasAtDragStart + deltaEV
+            if !biasDragLocked && deltaY != 0 {
+                biasDragLocked = true
+                onExposureBiasDragStarted?()
+            }
             onExposureBiasChanged?(newBias)
             moveBiasIndicator(to: location)
 
@@ -245,17 +255,10 @@ final class PreviewContainerView: UIView {
 
     private func showBiasIndicator(at point: CGPoint) {
         guard let circle = exposureBiasCircleLayer else { return }
+        circle.removeAllAnimations()
+        circle.opacity = 0.35
         circle.position = point
         circle.isHidden = false
-        circle.opacity = 0
-        let fadeIn = CABasicAnimation(keyPath: "opacity")
-        fadeIn.fromValue = 0
-        fadeIn.toValue = 0.35
-        fadeIn.duration = 0.12
-        fadeIn.fillMode = .forwards
-        fadeIn.isRemovedOnCompletion = false
-        circle.add(fadeIn, forKey: "biasFadeIn")
-        circle.opacity = 0.35
     }
 
     private func moveBiasIndicator(to point: CGPoint) {
@@ -268,6 +271,7 @@ final class PreviewContainerView: UIView {
 
     private func hideBiasIndicator() {
         guard let circle = exposureBiasCircleLayer else { return }
+        circle.removeAllAnimations()
         let fadeOut = CABasicAnimation(keyPath: "opacity")
         fadeOut.fromValue = circle.opacity
         fadeOut.toValue = 0
