@@ -1230,6 +1230,7 @@ private struct ToastLabel: View {
 
 private struct RuleOfThirdsGrid: View {
     var body: some View {
+        let devicePixelWidth = 1.0 / UIScreen.main.scale
         GeometryReader { geometry in
             let size = geometry.size
             Path { path in
@@ -1242,7 +1243,8 @@ private struct RuleOfThirdsGrid: View {
                 path.move(to: CGPoint(x: 0, y: size.height * 2 / 3))
                 path.addLine(to: CGPoint(x: size.width, y: size.height * 2 / 3))
             }
-            .stroke(.white.opacity(0.18), lineWidth: 0.5)
+            .stroke(.white.opacity(0.48), lineWidth: devicePixelWidth)
+            .blendMode(.overlay)
         }
     }
 }
