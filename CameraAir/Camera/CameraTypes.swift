@@ -306,6 +306,7 @@ struct CameraSettings: Equatable, Codable {
     var flash: FlashPreference = .off
     var isLivePhotoEnabled = false
     var isExposureLocked = false
+    var exposureBias: Float = 0.0
     var aspectRatio: AspectRatioOption = .portrait34
     var aspectOrientation: AspectOrientation = .portrait
     var nightMode: NightModePreference = .auto
@@ -316,6 +317,7 @@ struct CameraSettings: Equatable, Codable {
         flash: FlashPreference = .off,
         isLivePhotoEnabled: Bool = false,
         isExposureLocked: Bool = false,
+        exposureBias: Float = 0.0,
         aspectRatio: AspectRatioOption = .portrait34,
         aspectOrientation: AspectOrientation = .portrait,
         nightMode: NightModePreference = .auto,
@@ -325,6 +327,7 @@ struct CameraSettings: Equatable, Codable {
         self.flash = flash
         self.isLivePhotoEnabled = isLivePhotoEnabled
         self.isExposureLocked = isExposureLocked
+        self.exposureBias = exposureBias
         self.aspectRatio = aspectRatio
         self.aspectOrientation = aspectOrientation
         self.nightMode = nightMode
@@ -338,6 +341,7 @@ struct CameraSettings: Equatable, Codable {
         flash = (try? container.decode(FlashPreference.self, forKey: .flash)) ?? defaults.flash
         isLivePhotoEnabled = (try? container.decode(Bool.self, forKey: .isLivePhotoEnabled)) ?? defaults.isLivePhotoEnabled
         isExposureLocked = (try? container.decode(Bool.self, forKey: .isExposureLocked)) ?? defaults.isExposureLocked
+        exposureBias = (try? container.decode(Float.self, forKey: .exposureBias)) ?? defaults.exposureBias
         // Normalize legacy aspect ratio values
         let rawAspectRatio = (try? container.decode(AspectRatioOption.self, forKey: .aspectRatio)) ?? defaults.aspectRatio
         aspectRatio = rawAspectRatio.normalized
@@ -458,6 +462,8 @@ struct CameraCapabilities: Equatable {
     var supportsLivePhoto = false
     var supportsLowLightBoost = false
     var supportsExposureLock = false
+    var minExposureBias: Float = 0.0
+    var maxExposureBias: Float = 0.0
     var supportsGeometricDistortionCorrection = false
     var supportedZoomLevels: [ZoomLevel] = [.standard]
     var supportedZoomFactors: [CGFloat] = [1.0]

@@ -139,7 +139,14 @@ struct CameraRootView: View {
                     session: controller.session,
                     onTapDevicePoint: { devicePoint in
                         controller.handleFocusAndExposureTap(at: devicePoint)
-                    }
+                    },
+                    onExposureBiasChanged: { bias in
+                        controller.setExposureBias(bias)
+                    },
+                    onExposureBiasDragEnded: { bias in
+                        controller.setExposureBias(bias)
+                    },
+                    currentExposureBias: controller.settings.exposureBias
                 )
                 .frame(width: fitWidth, height: fitHeight)
                 .clipped()

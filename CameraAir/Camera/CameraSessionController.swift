@@ -353,10 +353,11 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             strongSelf.session.commitConfiguration()
 
             strongSelf.refreshCapabilities()
-            // Reset zoom to 1x when switching lenses
+            // Reset zoom to 1x and exposure bias when switching lenses
             strongSelf.publish {
                 strongSelf.settings.zoomLevel = .standard
                 strongSelf.settings.customZoomFactor = strongSelf.clampedDisplayZoomFactor(1.0)
+                strongSelf.settings.exposureBias = 0.0
             }
             strongSelf.applyCaptureSettings()
             strongSelf.saveSettings(for: .zoom)
@@ -407,6 +408,32 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
         showTransientToast(isLocked ? "Exposure locked" : "Exposure unlocked")
         sessionQueue.async { [weak self] in
             self?.applyCaptureSettings()
+        }
+    }
+
+    func setExposureBias(_ bias: Float) {
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.currentVideoInput?.device else { return }
+            let clamped = max(device.minExposureTargetBias,
+                              min(device.maxExposureTargetBias, bias))
+            do {
+                try device.lockForConfiguration()
+                if device.exposureMode == .locked || device.exposureMode == .custom {
+                    device.exposureMode = .continuousAutoExposure
+                }
+                device.setExposureTargetBias(clamped, completionHandler: nil)
+                device.unlockForConfiguration()
+            } catch {
+                self.showTransientError("Unable to adjust exposure.")
+                return
+            }
+
+            self.publish {
+                self.settings.exposureBias = clamped
+                if self.settings.isExposureLocked {
+                    self.settings.isExposureLocked = false
+                }
+            }
         }
     }
 
@@ -864,11 +891,24 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             defer { device.unlockForConfiguration() }
 
             if capabilities.supportsExposureLock {
-                let desiredMode: AVCaptureDevice.ExposureMode = settings.isExposureLocked ? .locked : .continuousAutoExposure
-                if device.isExposureModeSupported(desiredMode) {
-                    device.exposureMode = desiredMode
+                let exposureMode: AVCaptureDevice.ExposureMode
+                if settings.isExposureLocked {
+                    exposureMode = .locked
+                } else if settings.exposureBias != 0, device.isExposureModeSupported(.continuousAutoExposure) {
+                    exposureMode = .continuousAutoExposure
+                } else if device.isExposureModeSupported(.continuousAutoExposure) {
+                    exposureMode = .continuousAutoExposure
+                } else {
+                    exposureMode = .autoExpose
+                }
+                if device.isExposureModeSupported(exposureMode) {
+                    device.exposureMode = exposureMode
                 }
             }
+
+            let clampedBias = max(device.minExposureTargetBias,
+                                  min(device.maxExposureTargetBias, settings.exposureBias))
+            device.setExposureTargetBias(clampedBias, completionHandler: nil)
 
             Self.applyLowLightBoost(to: device, enabled: settings.nightMode != .off)
 
@@ -983,6 +1023,8 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
             ),
             supportsLowLightBoost: Self.deviceSupportsLowLightBoost(device),
             supportsExposureLock: device?.isExposureModeSupported(.locked) ?? false,
+            minExposureBias: device?.minExposureTargetBias ?? 0.0,
+            maxExposureBias: device?.maxExposureTargetBias ?? 0.0,
             supportsGeometricDistortionCorrection: Self.deviceSupportsGeometricDistortionCorrection(device),
             supportedZoomLevels: supportedZoomLevels,
             supportedZoomFactors: supportedZoomFactors,
