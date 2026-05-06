@@ -256,31 +256,20 @@ final class PreviewContainerView: UIView {
     private func showBiasIndicator(at point: CGPoint) {
         guard let circle = exposureBiasCircleLayer else { return }
         circle.removeAllAnimations()
-        circle.opacity = 0.35
         circle.position = point
         circle.isHidden = false
+        circle.opacity = 0.35
     }
 
     private func moveBiasIndicator(to point: CGPoint) {
-        guard let circle = exposureBiasCircleLayer else { return }
-        var clamped = point
-        clamped.x = max(14, min(bounds.width - 14, clamped.x))
-        clamped.y = max(14, min(bounds.height - 14, clamped.y))
-        circle.position = clamped
+        exposureBiasCircleLayer?.position = point
     }
 
     private func hideBiasIndicator() {
         guard let circle = exposureBiasCircleLayer else { return }
-        circle.removeAllAnimations()
-        let fadeOut = CABasicAnimation(keyPath: "opacity")
-        fadeOut.fromValue = circle.opacity
-        fadeOut.toValue = 0
-        fadeOut.duration = 0.25
-        fadeOut.fillMode = .forwards
-        fadeOut.isRemovedOnCompletion = false
-        circle.add(fadeOut, forKey: "biasFadeOut")
-        circle.opacity = 0
         circle.isHidden = true
+        circle.opacity = 0
+        circle.removeAllAnimations()
     }
 }
 
