@@ -747,8 +747,8 @@ private struct ZoomFactorSlider: View {
                     let x = positions[index]
                     Rectangle()
                         .fill(.white.opacity(0.25))
-                        .frame(width: 1, height: 4)
-                        .position(x: x, y: trackY - 2)
+                        .frame(width: 1, height: 2)
+                        .position(x: x, y: trackY - 1)
                 }
 
                 // Prominent ticks at preset label positions (0.5, 1, 2, 5, ...), taller and higher so they render above the labels
@@ -756,8 +756,8 @@ private struct ZoomFactorSlider: View {
                     let x = labelX(for: factor, in: width)
                     Rectangle()
                         .fill(.white.opacity(0.6))
-                        .frame(width: 2, height: 12)
-                        .position(x: x, y: trackY - 6)
+                        .frame(width: 1, height: 6)
+                        .position(x: x, y: trackY - 3)
                 }
 
                 if isDragging || !isPresetZoom(value) {
