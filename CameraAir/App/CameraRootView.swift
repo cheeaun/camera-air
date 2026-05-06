@@ -15,9 +15,9 @@ enum CameraHaptics {
     }
 
     static func light() { impact(.light) }
-    static func interface() { impact(.medium) }
-    static func rigid() { impact(.rigid) }
-    static func heavy() { impact(.heavy) }
+    static func interface() { impact(.light) }
+    static func rigid() { impact(.light) }
+    static func heavy() { impact(.light) }
 
     private static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
         lock.lock()
