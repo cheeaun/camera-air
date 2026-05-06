@@ -255,21 +255,28 @@ final class PreviewContainerView: UIView {
 
     private func showBiasIndicator(at point: CGPoint) {
         guard let circle = exposureBiasCircleLayer else { return }
-        circle.removeAllAnimations()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         circle.position = point
         circle.isHidden = false
         circle.opacity = 0.35
+        CATransaction.commit()
     }
 
     private func moveBiasIndicator(to point: CGPoint) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         exposureBiasCircleLayer?.position = point
+        CATransaction.commit()
     }
 
     private func hideBiasIndicator() {
         guard let circle = exposureBiasCircleLayer else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         circle.isHidden = true
         circle.opacity = 0
-        circle.removeAllAnimations()
+        CATransaction.commit()
     }
 }
 
