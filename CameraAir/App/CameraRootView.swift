@@ -141,10 +141,6 @@ struct CameraRootView: View {
                         controller.handleFocusAndExposureTap(at: devicePoint)
                     }
                 )
-                .overlay {
-                    RuleOfThirdsGrid()
-                        .allowsHitTesting(false)
-                }
                 .frame(width: fitWidth, height: fitHeight)
                 .clipped()
                 .position(x: screenSize.width / 2, y: screenSize.height / 2)
@@ -1226,27 +1222,6 @@ private struct ToastLabel: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .glassCapsule(interactive: false)
-    }
-}
-
-private struct RuleOfThirdsGrid: View {
-    var body: some View {
-        let devicePixelWidth = 1.0 / UIScreen.main.scale
-        GeometryReader { geometry in
-            let size = geometry.size
-            Path { path in
-                path.move(to: CGPoint(x: size.width / 3, y: 0))
-                path.addLine(to: CGPoint(x: size.width / 3, y: size.height))
-                path.move(to: CGPoint(x: size.width * 2 / 3, y: 0))
-                path.addLine(to: CGPoint(x: size.width * 2 / 3, y: size.height))
-                path.move(to: CGPoint(x: 0, y: size.height / 3))
-                path.addLine(to: CGPoint(x: size.width, y: size.height / 3))
-                path.move(to: CGPoint(x: 0, y: size.height * 2 / 3))
-                path.addLine(to: CGPoint(x: size.width, y: size.height * 2 / 3))
-            }
-            .stroke(.white.opacity(0.5), lineWidth: devicePixelWidth)
-            .blendMode(.difference)
-        }
     }
 }
 

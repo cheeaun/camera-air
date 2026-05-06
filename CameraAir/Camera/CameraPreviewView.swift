@@ -32,11 +32,14 @@ final class PreviewContainerView: UIView {
 
     private var exposureBoxLayer: CAShapeLayer?
     private var exposureBoxDismissWork: DispatchWorkItem?
+    private var gridLayer: CAShapeLayer?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         previewLayer.videoGravity = .resizeAspectFill
         backgroundColor = .black
+
+        setupGridLayer()
 
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
         addGestureRecognizer(tapGesture)
@@ -44,6 +47,41 @@ final class PreviewContainerView: UIView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateGridLayer()
+    }
+
+    private func setupGridLayer() {
+        let shapeLayer = CAShapeLayer()
+        shapeLayer.fillColor = UIColor.clear.cgColor
+        shapeLayer.strokeColor = UIColor.white.cgColor
+        shapeLayer.lineWidth = 1.0 / UIScreen.main.scale
+        shapeLayer.opacity = 0.5
+        shapeLayer.compositingFilter = "differenceBlendMode"
+        layer.addSublayer(shapeLayer)
+        gridLayer = shapeLayer
+    }
+
+    private func updateGridLayer() {
+        guard let gridLayer else { return }
+        let size = bounds.size
+        guard size.width > 0, size.height > 0 else { return }
+
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: size.width / 3, y: 0))
+        path.addLine(to: CGPoint(x: size.width / 3, y: size.height))
+        path.move(to: CGPoint(x: size.width * 2 / 3, y: 0))
+        path.addLine(to: CGPoint(x: size.width * 2 / 3, y: size.height))
+        path.move(to: CGPoint(x: 0, y: size.height / 3))
+        path.addLine(to: CGPoint(x: size.width, y: size.height / 3))
+        path.move(to: CGPoint(x: 0, y: size.height * 2 / 3))
+        path.addLine(to: CGPoint(x: size.width, y: size.height * 2 / 3))
+
+        gridLayer.path = path.cgPath
+        gridLayer.frame = bounds
     }
 
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
