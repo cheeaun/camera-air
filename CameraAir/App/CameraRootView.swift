@@ -135,15 +135,16 @@ struct CameraRootView: View {
                 fitHeight = fitWidth / cropRatio
             }
 
-            return ZStack {
-                CameraPreviewView(
+            return CameraPreviewView(
                     session: controller.session,
                     onTapDevicePoint: { devicePoint in
                         controller.handleFocusAndExposureTap(at: devicePoint)
                     }
                 )
-                RuleOfThirdsGrid()
-            }
+                .overlay {
+                    RuleOfThirdsGrid()
+                        .allowsHitTesting(false)
+                }
                 .frame(width: fitWidth, height: fitHeight)
                 .clipped()
                 .position(x: screenSize.width / 2, y: screenSize.height / 2)
