@@ -446,9 +446,6 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
             self.publish {
                 self.settings.exposureBias = clamped
-                if self.settings.isExposureLocked {
-                    self.settings.isExposureLocked = false
-                }
             }
         }
     }
