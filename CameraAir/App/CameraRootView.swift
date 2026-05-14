@@ -183,7 +183,13 @@ struct CameraRootView: View {
             if let message = controller.errorMessage ?? controller.toastMessage {
                 ToastLabel(message: message)
                     .padding(.top, 84)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .top).combined(with: .opacity),
+                            removal: .move(edge: .top).combined(with: .opacity)
+                        )
+                    )
+                    .id(message)
             }
         }
     }
@@ -1230,6 +1236,7 @@ private struct ToastLabel: View {
         Text(message)
             .font(.system(size: 13, weight: .semibold, design: .rounded))
             .foregroundStyle(.white)
+            .contentTransition(.opacity)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .glassCapsule(interactive: false)

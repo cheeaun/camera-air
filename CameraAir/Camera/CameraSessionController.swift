@@ -1239,23 +1239,31 @@ final class CameraSessionController: NSObject, ObservableObject, @unchecked Send
 
     private func showTransientError(_ message: String) {
         publish {
-            self.errorMessage = message
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+                self.errorMessage = message
+            }
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak self] in
             guard self?.errorMessage == message else { return }
-            self?.errorMessage = nil
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                self?.errorMessage = nil
+            }
         }
     }
 
     private func showTransientToast(_ message: String) {
         publish {
-            self.toastMessage = message
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+                self.toastMessage = message
+            }
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak self] in
             guard self?.toastMessage == message else { return }
-            self?.toastMessage = nil
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                self?.toastMessage = nil
+            }
         }
     }
 
